@@ -2,7 +2,7 @@
 % CMikolaitis, 2022
 clear, clc, %clf
 %% Input wrapper
-InputName = 'TNDOC_November2021';
+InputName = 'FILE NAME HERE';
 filename = [InputName '.txt'];
 %% Open File
 opts = detectImportOptions(filename);
