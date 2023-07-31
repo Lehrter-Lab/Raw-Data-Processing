@@ -40,6 +40,7 @@ if terminaldex > 0
     DATA(1:terminaldex,:) = [];
 end
 %% Manually delete any bad data
+% Note that samples should be labeled by numbers only, please check that this is the case
 %standards(1:5,:) = [];
 %% Split Data
 % Get point at which 2nd standards are run
