@@ -144,8 +144,7 @@ for k = 1 : length(theFiles)
         panicbutton = 1;
         for i = 1:size(Sample_name_ID_unique,1)
             snIDu  = Sample_name_ID_unique{i,1};
-            holder = str2num(snIDu);
-            if isempty(holder) && contains(snIDu,'QC') && ~contains(snIDu,'Rinse')
+            if contains(snIDu,'QC') && ~contains(snIDu,'Rinse')
                 idx_QA(i,1) = 0; % characters
                 DIC_QA(i,1) = mean(unknowns.Conc_(ChangeInID(i,1):ChangeInID(i,2),1));
                 t_QA(i,1)   = unknowns.Date_Time(ChangeInID(i,1),1);
