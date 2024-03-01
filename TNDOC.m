@@ -192,15 +192,10 @@ for k = 1 : length(theFiles)
         varnames =  {'SampleName','Date_time','Conc_mg_L'};
         % % varnames = {'Id','yyyymmdd','decy','time','latN','lonW', 'Depth','Temp','Pres','CTD_S','Sal1','Sig_th','O2_1','OxFixT','Anom1'};
     %% Generate Excel Sheet
-    % TNDOC is the accepted naming convention for multianalyte runs
-
-        excelname = InputName;
+    
         temp      = standards.Anal_{1};
-        if temp == "TN"
-            excelname(3:5) = [];
-        elseif temp == "NPOC"
-            excelname(1:2) = [];
-        end
+        rundate   = regexp(InputName,'\d*','match');
+        excelname = append(temp,' ',rundate{:});
         filename_excel = [excelname '.xlsx'];
         T_name = table({excelname});
         % T_Excel_out.Properties.VariableNames = varnames;
