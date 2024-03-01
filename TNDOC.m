@@ -160,9 +160,9 @@ for k = 1 : length(theFiles)
         figure;
         subplot(2,1,1)
         if panicbutton == 0
-            t = t_QA(find(idx_QA == 0));
-            y = DIC_QA(find(idx_QA == 0));
-            text(t,y,Sample_name_ID_unique(find(idx_QA == 0)));
+            t = t_QA(idx_QA == 0);
+            y = DIC_QA(idx_QA == 0);
+            text(t,y,Sample_name_ID_unique(idx_QA == 0));
             ymax = round(max(y(:))*1.2);
         else
             t = 0;
@@ -182,7 +182,7 @@ for k = 1 : length(theFiles)
         t = t_sample(find(idx_QA == 1));
         y = DIC_sample(find(idx_QA == 1));
         plot(t,y,'-ok')
-        %text(t,y+1,Sample_name_ID_unique(find(idx_QA == 1)));
+        %text(t,y+1,Sample_name_ID_unique(idx_QA == 1));
         ymax = round(max(y(:))*1.2);
         set(gca,'ylim',[0 ymax])
         title('Samples')
@@ -196,7 +196,7 @@ for k = 1 : length(theFiles)
         filename_excel = [excelname '.xlsx'];
         T_name = table({excelname});
         % T_Excel_out.Properties.VariableNames = varnames;
-        T_Excel_out = table(Sample_name_ID_unique(find(idx_QA == 1)),t,y);
+        T_Excel_out = table(Sample_name_ID_unique(idx_QA == 1),t,y);
         T_Excel_out.Properties.VariableNames = varnames;
         writetable(T_name,filename_excel,'Sheet',1,'Range','A1','WriteVariableNames',false);
         writetable(T_Excel_out,filename_excel,'Sheet',1,'Range','A2');
