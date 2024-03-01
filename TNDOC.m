@@ -135,7 +135,7 @@ for k = 1 : length(theFiles)
         ChangeInID(1:end-1,2) = ChangeInID(2:end,1)-1;
         ChangeInID(end,:) = [];
         Sample_name_ID_unique = Sample_name_ID(ChangeInID(:,1));
-    %% 
+
     % 2/14/16 Note: Fixed case where samples with letters in label would be placed 
     % in QA/QC bin.    
 
@@ -156,8 +156,6 @@ for k = 1 : length(theFiles)
                 t_sample(i,1)   = unknowns.Date_Time(ChangeInID(i,1),1);
             end
         end
-    %% 
-    % 
 
         % Plot QA
         figure;
