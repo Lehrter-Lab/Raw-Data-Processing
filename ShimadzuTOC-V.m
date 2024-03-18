@@ -1,5 +1,7 @@
 % Generalized script for Shimadzu Outputs
 % CMikolaitis, 2022
+% Test
+
 clear, clc, %clf
 %% Input wrapper
 InputName = 'FILE NAME HERE';
