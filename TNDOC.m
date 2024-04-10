@@ -7,18 +7,21 @@ clear, clc, %clc
 warning off
 %% Choose auto or single
 
-switcher = 1; % 0 for manual
-manualName = ['Chris TNDOC 021424 Detail.txt'];
+switcher = 0; % 0 for manual
+manualName = ['Chris TNDOC 012624 Detail.txt'];
 
 inputFolder = 'C:\Users\cmikolaitis\Documents\TOC_Data'; % Make sure input files are here
 filePattern = fullfile(inputFolder,'*.txt');
 theFiles    = dir(filePattern);
-
+if switcher == 0
+    theFiles = 'a';
+end
 for k = 1 : length(theFiles)
-    baseFileName = theFiles(k).name;
-    filename = fullfile(theFiles(k).folder, baseFileName);
     if switcher == 0
         filename = manualName; % Write file name here
+    else
+        baseFileName = theFiles(k).name;
+        filename = fullfile(theFiles(k).folder, baseFileName);
     end
     fprintf(1, 'Now reading %s\n', filename);
     InputName = extractBefore(filename, ".");
