@@ -13,6 +13,7 @@ manualName = ['Chris TNDOC 012624 Detail.txt'];
 inputFolder = 'C:\Users\cmikolaitis\Documents\TOC_Data'; % Make sure input files are here
 filePattern = fullfile(inputFolder,'*.txt');
 theFiles    = dir(filePattern);
+
 if switcher == 0
     theFiles = 'a';
 end
@@ -164,7 +165,11 @@ for k = 1 : length(theFiles)
         subplot(2,1,1)
         if panicbutton == 0
             t = t_QA(idx_QA == 0);
+            t1 = t(1:2:end,:);
+            t2 = t(2:2:end,:);
             y = DIC_QA(idx_QA == 0);
+            y1 = y(1:2:end,:);
+            y2 = y(2:2:end,:);
             text(t,y,Sample_name_ID_unique(idx_QA == 0));
             ymax = round(max(y(:))*1.2);
         else
@@ -173,7 +178,10 @@ for k = 1 : length(theFiles)
             text(t,y,'DRIFT CHECK NOT AVAILABLE');
             ymax = round(max(y(:))+1);
         end
-        plot(t,y,'-ok')
+        plot(t1,y1,'-ok')
+        hold on
+        plot(t2,y2,'-dk')
+        legend({"Low Std","High Std"},"Location","best")
 
         set(gca,'ylim',[0 ymax])
         title([{'Check this figure to ensure there is no serious drift'};...
