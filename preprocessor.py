@@ -8,22 +8,15 @@ from sklearn.linear_model import LinearRegression
 ## For my sanity
 pd.options.mode.copy_on_write = True
 ##-----------------------------------------------------------------------------
-## Input Options
-## One directory for each: PP, PCN, Nutrients, DIC, TN/DOC
-inputPP     = 'PP'
-inputPCN    = 'PCN'
-inputDIC    = 'DIC'
-inputTNDOC  = 'TNDOC'
-inputNUT    = 'NUT'
-
-inputDirs   = [inputPP,inputPCN,inputDIC,inputTNDOC,inputNUT]
-##-----------------------------------------------------------------------------
 ## Move stuff around
 def pullIn(inFile):
     if inFile.endswith('.xls') or inFile.endswith('.xlsx'):
         df = pd.read_excel(inFile)
     else:
-        df = pd.read_csv(inFile)
+        try:
+            df = pd.read_csv(inFile, delimiter='\t',skiprows=13)
+        except:
+            df = pd.read_csv(inFile)
     df.dropna(thresh=2,inplace=True) # cut rows with less than 2 values
     return df
 
@@ -40,10 +33,13 @@ def maketheDF(directory,analFunc):
             print(pathF)
     return dfs
 
-def buildMatrix():
+def buildMatrix(inputDirs,inputFuncs):
     dfs = {}
-    for folder in inputDirs:
-        dfs[folder] = maketheDF(folder)
+    for i in range(len(inputDirs)):
+        try:
+            dfs[i] = maketheDF(inputDirs[i],inputFuncs[i])
+        except:
+            print("Error in: ",inputDirs[i])
     return dfs
 
 ##-----------------------------------------------------------------------------
@@ -68,62 +64,114 @@ def parsePCN(inFile):
         fill = ['potato']*neededfill
         fill.extend(colNames)
         colNames = fill
-    df.columns = colNames # rename columns
-    df = df.drop('potato',axis=1) # remove filled columns
+        df.columns = colNames # rename columns
+        df = df.drop('potato',axis=1) # remove filled columns
+    else:
+        df.columns = colNames # rename columns
     df = df[pd.to_numeric(df['N-mg'], errors='coerce').notnull()] #drop header2
     
     return df
 
 def parseNUT(inFile):
-    colNames = ['SampleID','NeedleNumber','ResultID','Position','SampleType',
-                   'SampleIdentity','NO3+NO2','PO4','NO2','NH4','dSi']
-    dropCols = ['NeedleNumber','ResultID','Position','SampleType',
-                   'SampleIdentity']
+    dropCols = ['NeedleNumber','ResultID','Position','SampleType','SampleIdentity']
     df = pullIn(inFile)
-    diff = len(df.columns)-len(colNames)
-    if diff != 0: # remove Si if not needed
-        colNames = colNames[:-1]
-    df.columns = colNames # rename columns
+    # Match what columns to keep
+    realCols = df.columns
+    analCols = ['NO3 NO2','PO4','NO2','NH4','D Si']
+    realAnal = [val for val in realCols if any(anal in analCols for anal in analCols)]
+    df.columns = realAnal
+    # Drop empty cols and rename to Sample Id
+    df.dropna(axis=1,how='all',inplace=True)
+    sidCol = df.columns.get_loc('NeedleNumber')-1
+    df = df.rename(columns={df.columns[sidCol]:'SampleID'})
+    df = df.rename(columns=lambda x: x.strip())
+    df = df[df.columns.drop(list(df.filter(regex='Unnamed')))]
+    # Get r-squared
+    stds = df[df['SampleType'].str.contains('S')]
+    # Get drift
+    drift = df[df['SampleType'].str.contains('D')]
+    # Final Clean
     df = df.drop(dropCols,axis=1) # remove filled columns
+    df = df.dropna(subset=['SampleID'])
     return df
 
 def parseDICTNDOC(inFile):
     cleanDFs,drift = {},{}
-    keepCols = ['Sample Name','Conc.']
-    df = pd.read_csv(inFile, delimiter='\t',skiprows=13)
+    keepCols       = ['Sample Name','Conc.']
+    originalCols   = ['Type','Anal.','Sample Name','Sample ID','Origin',
+                      'Cal. Curve','Manual Dilution','Notes','Date / Time',
+                      'Spl. No.','Inj. No.','Analysis(Inj.)','Area','Conc.',
+                      'Result','Excluded','Inj. Vol.']	
+    df = pullIn(inFile)
+    # Find data start
+    # Handle column names
+    neededfill = len(df.columns)-len(originalCols) # get num of columns
+    if neededfill > 0: #fill to the left if not enough column names
+        fill = ['potato']*neededfill
+        originalCols.extend(fill)
+        df.columns = originalCols # rename columns
+        df = df.drop('potato',axis=1) # remove filled columns
+    else:
+        df.columns = originalCols # rename columns
     df = df[df.Excluded == 0] # Clean flagged reads
-    df = df[(~df['Sample Name'].str.contains('Rinse')) & 
-            (~df['Sample ID'].str.contains('Rinse',na=False))]
-    gb  = df.groupby('Anal.') # Groupby analytes
+    try:
+        df = df[(~df['Sample Name'].str.contains('Rinse',na=False)) & 
+                (~df['Sample ID'].str.contains('Rinse',na=False))]
+    except:
+        df = df[~df['Sample Name'].str.contains('Rinse',na=False)]
+    ## Split into analyte groups
+    df['grouper'] = np.where(df['Type'].eq('Unknown'),df['Cal. Curve'],df['Origin'])
+    gb  = df.groupby('grouper') # Groupby analytes
     dfs = [gb.get_group(x) for x in gb.groups]
     for i in range(len(dfs)):
         # Split stds from values
         stds      = dfs[i]['Cal. Curve'].unique().tolist()
         realstds  = stds[-1]
-        print(realstds)
-        stdAreas  = dfs[i][dfs[i]['Origin'].str.contains(realstds,regex=False)]
+        stdAreas  = dfs[i][dfs[i]['Origin'].eq(realstds)]
         dfs[i]    = dfs[i][dfs[i]['Cal. Curve'].notna()]
         # Get mean concentrations
+        checkNames  = ['QC','Q','L','H'] # Possible check names
         cleanDFs[i] = dfs[i].filter(keepCols, axis=1)
-        cleanDFs[i] = cleanDFs[i][~cleanDFs[i]['Sample Name'].str.contains('QC')]
+        cleanDFs[i] = cleanDFs[i][~cleanDFs[i]['Sample Name'].isin(checkNames)]
         cleanDFs[i] = cleanDFs[i].groupby("Sample Name").mean().reset_index()
         # Do linear regression
-        x = stdAreas[['Conc.']]
-        y = stdAreas['Area']
-        model = LinearRegression()
-        model.fit(x, y)
-        r2_score = model.score(x, y)
-        cleanDFs[i]['r-sq.'] = r2_score
+        try:
+            x = stdAreas[['Conc.']]
+            y = stdAreas['Area']
+            model = LinearRegression()
+            model.fit(x, y)
+            r2_score = model.score(x, y)
+            cleanDFs[i]['r-sq.'] = r2_score
+        except:
+            cleanDFs[i]['r-sq.'] = "No curve available"
         # Get drift
-        drift = dfs[i][dfs[i]['Sample ID'].str.contains('5',na=False)]
+        try:
+            drift = dfs[i][(dfs[i]['Sample ID'].str.contains('5',na=False)) | 
+                            (dfs[i]['Sample Name'].str.contains('H',na=False))]
+        except:
+            drift = dfs[i][dfs[i]['Sample Name'].str.contains('H',na=False)]
         drift = drift[drift['Conc.'] > 1.5] # Scrub empty vials
-        if '20' in drift['Sample ID'].unique():
-            cleanDFs[i]['Max Deviation of High Check (%)'] = (20 - drift['Conc.'].min())/5*100
+        if 'IC' in drift['Anal.'].unique():
+            absDiff = (20 - drift['Conc.']).abs().max()
+            cleanDFs[i]['Max Deviation of High Check (%)'] = absDiff/20*100
         else:
-            cleanDFs[i]['Max Deviation of High Check (%)'] = (5 - drift['Conc.'].min())/5*100
+            absDiff = (5 - drift['Conc.']).abs().max()
+            cleanDFs[i]['Max % Abs. Diff of High Check'] = absDiff/5*100
         # Add Reference 
         cleanDFs[i]['Raw File'] = inFile
     return cleanDFs
 ##-----------------------------------------------------------------------------
+## Input Options
+## One directory for each: PP, PCN, Nutrients, DIC, TN/DOC
+inputPP     = 'PP'
+inputPCN    = 'PCN'
+inputDIC    = 'DIC'
+inputTNDOC  = 'TNDOC'
+inputNUT    = 'NUT'
+
+inputDirs   = [inputPP,inputPCN,inputDIC,inputTNDOC,inputNUT]
+inputFuncs  = [parsePP,parsePCN,parseDICTNDOC,parseDICTNDOC,parseNUT]
+##-----------------------------------------------------------------------------
 ## Do the work
-a = parseDICTNDOC('Chris TNDOC 012424 Detail.txt')
+a = buildMatrix(inputDirs,inputFuncs)
+#a = parseNUT('DSi July, 8.1.19.xls')
