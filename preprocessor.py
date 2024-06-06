@@ -2,6 +2,8 @@
 
 import pandas as pd
 import os
+import numpy as np
+from sklearn.linear_model import LinearRegression
 
 ## For my sanity
 pd.options.mode.copy_on_write = True
@@ -86,17 +88,42 @@ def parseNUT(inFile):
     return df
 
 def parseDICTNDOC(inFile):
+    cleanDFs,drift = {},{}
+    keepCols = ['Sample Name','Conc.']
     df = pd.read_csv(inFile, delimiter='\t',skiprows=13)
     df = df[df.Excluded == 0] # Clean flagged reads
-    df = df[~df['Sample Name'].str.contains('Rinse')]
+    df = df[(~df['Sample Name'].str.contains('Rinse')) & 
+            (~df['Sample ID'].str.contains('Rinse',na=False))]
     gb  = df.groupby('Anal.') # Groupby analytes
     dfs = [gb.get_group(x) for x in gb.groups]
-    for i in range(len(dfs)): # Remove excess standards
+    for i in range(len(dfs)):
+        # Split stds from values
         stds      = dfs[i]['Cal. Curve'].unique().tolist()
         realstds  = stds[-1]
-        dfs[i] = dfs[i][dfs[i].Origin.str.contains(realstds,regex=False) |
-                        dfs[i]['Cal. Curve'].str.contains(realstds,regex=False)]
-    return dfs
+        print(realstds)
+        stdAreas  = dfs[i][dfs[i]['Origin'].str.contains(realstds,regex=False)]
+        dfs[i]    = dfs[i][dfs[i]['Cal. Curve'].notna()]
+        # Get mean concentrations
+        cleanDFs[i] = dfs[i].filter(keepCols, axis=1)
+        cleanDFs[i] = cleanDFs[i][~cleanDFs[i]['Sample Name'].str.contains('QC')]
+        cleanDFs[i] = cleanDFs[i].groupby("Sample Name").mean().reset_index()
+        # Do linear regression
+        x = stdAreas[['Conc.']]
+        y = stdAreas['Area']
+        model = LinearRegression()
+        model.fit(x, y)
+        r2_score = model.score(x, y)
+        cleanDFs[i]['r-sq.'] = r2_score
+        # Get drift
+        drift = dfs[i][dfs[i]['Sample ID'].str.contains('5',na=False)]
+        drift = drift[drift['Conc.'] > 1.5] # Scrub empty vials
+        if '20' in drift['Sample ID'].unique():
+            cleanDFs[i]['Max Deviation of High Check (%)'] = (20 - drift['Conc.'].min())/5*100
+        else:
+            cleanDFs[i]['Max Deviation of High Check (%)'] = (5 - drift['Conc.'].min())/5*100
+        # Add Reference 
+        cleanDFs[i]['Raw File'] = inFile
+    return cleanDFs
 ##-----------------------------------------------------------------------------
 ## Do the work
-a = parsePP('4.8.2024_PP RAW DATA_NOAA RESTORE_AB.xlsx')
+a = parseDICTNDOC('Chris TNDOC 012424 Detail.txt')
