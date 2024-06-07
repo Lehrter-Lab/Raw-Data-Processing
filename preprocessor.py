@@ -162,35 +162,38 @@ def parseDICTNDOC(inFile):
         # Get mean concentrations
         checkNames  = ['QC','Q','L','H'] # Possible check names
         cleanDFs[i] = dfs[i].filter(keepCols, axis=1)
-        cleanDFs[i] = cleanDFs[i][~cleanDFs[i]['Sample Name'].isin(checkNames)]
-        cleanDFs[i] = cleanDFs[i].groupby("Sample Name").mean().reset_index()
-        # Do linear regression
-        try:
-            x = stdAreas[['Conc.']]
-            y = stdAreas['Area']
-            model = LinearRegression()
-            model.fit(x, y)
-            r2_score = model.score(x, y)
-            cleanDFs[i]['r-sq.'] = r2_score
-        except:
-            cleanDFs[i]['r-sq.'] = "No curve available"
-        # Get drift
-        try:
-            drift = dfs[i][(dfs[i]['Sample ID'].str.contains('5',na=False)) | 
-                            (dfs[i]['Sample Name'].str.contains('H',na=False))]
-        except:
-            drift = dfs[i][dfs[i]['Sample Name'].str.contains('H',na=False)]
-        drift = drift[drift['Conc.'] > 1.5] # Scrub empty vials
-        if 'IC' in drift['Anal.'].unique():
-            absDiff = (20 - drift['Conc.']).abs().max()
-            cleanDFs[i]['Max Deviation of High Check (%)'] = absDiff/20*100
+        if cleanDFs[i].empty:
+            pass
         else:
-            absDiff = (5 - drift['Conc.']).abs().max()
-            cleanDFs[i]['Max % Abs. Diff of High Check'] = absDiff/5*100
-        # Add Reference
-        newname = 'Conc. ' + dfs[i]['Analysis(Inj.)'].unique()
-        cleanDFs[i].rename(columns={'Conc.':newname[0]},inplace=True)
-        cleanDFs[i]['Raw File'] = inFile
+            cleanDFs[i] = cleanDFs[i][~cleanDFs[i]['Sample Name'].isin(checkNames)]
+            cleanDFs[i] = cleanDFs[i].groupby("Sample Name").mean().reset_index()
+            # Do linear regression
+            try:
+                x = stdAreas[['Conc.']]
+                y = stdAreas['Area']
+                model = LinearRegression()
+                model.fit(x, y)
+                r2_score = model.score(x, y)
+                cleanDFs[i]['r-sq.'] = r2_score
+            except:
+                cleanDFs[i]['r-sq.'] = "No curve available"
+            # Get drift
+            try:
+                drift = dfs[i][(dfs[i]['Sample ID'].str.contains('5',na=False)) | 
+                                (dfs[i]['Sample Name'].str.contains('H',na=False))]
+            except:
+                drift = dfs[i][dfs[i]['Sample Name'].str.contains('H',na=False)]
+            drift = drift[drift['Conc.'] > 1.5] # Scrub empty vials
+            if 'IC' in drift['Anal.'].unique():
+                absDiff = (20 - drift['Conc.']).abs().max()
+                cleanDFs[i]['Max Deviation of High Check (%)'] = absDiff/20*100
+            else:
+                absDiff = (5 - drift['Conc.']).abs().max()
+                cleanDFs[i]['Max % Abs. Diff of High Check'] = absDiff/5*100
+            # Add Reference
+            newname = 'Conc. ' + dfs[i]['Analysis(Inj.)'].unique()
+            cleanDFs[i].rename(columns={'Conc.':newname[0]},inplace=True)
+            cleanDFs[i]['Raw File'] = inFile
     cleaned = pd.concat(cleanDFs,ignore_index=True)
     return cleaned
 ##-----------------------------------------------------------------------------
@@ -199,13 +202,13 @@ def parseDICTNDOC(inFile):
 inputPP     = 'PP'
 inputPCN    = 'PCN'
 inputDIC    = 'DIC'
-inputTNDOC  = 'TNDOC'
-inputNUT    = 'NUT'
+inputTNDOC  = 'TN-DOC'
+inputNUT    = 'Nutrients'
 
-inputDirs   = [inputPP,inputPCN,inputDIC,inputTNDOC,inputNUT]
-inputFuncs  = [parsePP,parsePCN,parseDICTNDOC,parseDICTNDOC,parseNUT]
+inputDirs   = [inputPCN,inputDIC,inputTNDOC,inputNUT]
+inputFuncs  = [parsePCN,parseDICTNDOC,parseDICTNDOC,parseNUT]
 ##-----------------------------------------------------------------------------
 ## Do the work
-a = buildMatrix(inputDirs,inputFuncs)
-b = buildNC(a,'potato')
-#a = parseStations('Station_List_Rev1_May2019 (1).xlsx')
+#a = buildMatrix(inputDirs,inputFuncs)
+#b = buildNC(a,'potato')
+a = parseDICTNDOC('Chris TNDOC 012624 Detail.txt')
