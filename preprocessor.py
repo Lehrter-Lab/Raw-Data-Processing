@@ -4,6 +4,10 @@ import pandas as pd
 import os
 import numpy as np
 from sklearn.linear_model import LinearRegression
+import datetime as dt
+import xarray as xr
+import re
+import netCDF4 as nc
 
 ## For my sanity
 pd.options.mode.copy_on_write = True
@@ -42,6 +46,16 @@ def buildMatrix(inputDirs,inputFuncs):
             print("Error in: ",inputDirs[i])
     return dfs
 
+def buildNC(inputDict,outname):
+    # Match station ids to loc
+    temp = pd.concat(inputDict.values(),ignore_index=True) # You are working with dict of dicts, not just dict
+    myXR = xr.Dataset(temp).to_array()
+    # Convert to netcdf
+    # xds = xarray.Dataset.from_dataframe(holder)
+    # xds = xds.set_coords(['Date','Station ID'])
+    # filename = outname + '.nc'
+    # xds.to_netcdf(filename,format="NETCDF4")
+    return myXR
 ##-----------------------------------------------------------------------------
 ## Handle data
 ## Cleans but does not QC
@@ -49,10 +63,25 @@ def buildMatrix(inputDirs,inputFuncs):
 ## Add in R-squareds as proxy for QC
 ## Need function for PP cal curve
 
+## Don't touch yet
+def parseStations(inFile):
+    df = pullIn(inFile)
+    df.dropna(thresh=4,inplace=True) # cut rows with less than 2 values
+    df.dropna(thresh=4,axis=1,inplace=True) # drop most note cols
+    df.columns = df.iloc[0] # Fix header
+    df = df[1:] # Drop inline header
+    try:
+        df['StationID'] = df['Line']+df['Letter']+'-'+df['Number'].astype(str)
+    except:
+        pass
+    df['Raw File'] = inFile
+    return df
+
 def parsePP(inFile):
     df = pullIn(inFile)
     stds = df[df.Sample.astype(str).str.contains('.',regex=False)]
     stds = stds[~pd.to_numeric(stds.Sample,errors='coerce').isnull()]
+    df['Raw File'] = inFile
     return df
 
 def parsePCN(inFile):
@@ -69,7 +98,7 @@ def parsePCN(inFile):
     else:
         df.columns = colNames # rename columns
     df = df[pd.to_numeric(df['N-mg'], errors='coerce').notnull()] #drop header2
-    
+    df['Raw File'] = inFile
     return df
 
 def parseNUT(inFile):
@@ -86,13 +115,14 @@ def parseNUT(inFile):
     df = df.rename(columns={df.columns[sidCol]:'SampleID'})
     df = df.rename(columns=lambda x: x.strip())
     df = df[df.columns.drop(list(df.filter(regex='Unnamed')))]
-    # Get r-squared
-    stds = df[df['SampleType'].str.contains('S')]
-    # Get drift
-    drift = df[df['SampleType'].str.contains('D')]
+    # # Get r-squared
+    # stds = df[df['SampleType'].str.contains('S')]
+    # # Get drift
+    # drift = df[df['SampleType'].str.contains('D')]
     # Final Clean
     df = df.drop(dropCols,axis=1) # remove filled columns
     df = df.dropna(subset=['SampleID'])
+    df['Raw File'] = inFile
     return df
 
 def parseDICTNDOC(inFile):
@@ -103,7 +133,6 @@ def parseDICTNDOC(inFile):
                       'Spl. No.','Inj. No.','Analysis(Inj.)','Area','Conc.',
                       'Result','Excluded','Inj. Vol.']	
     df = pullIn(inFile)
-    # Find data start
     # Handle column names
     neededfill = len(df.columns)-len(originalCols) # get num of columns
     if neededfill > 0: #fill to the left if not enough column names
@@ -123,6 +152,7 @@ def parseDICTNDOC(inFile):
     df['grouper'] = np.where(df['Type'].eq('Unknown'),df['Cal. Curve'],df['Origin'])
     gb  = df.groupby('grouper') # Groupby analytes
     dfs = [gb.get_group(x) for x in gb.groups]
+    cleaned=[]
     for i in range(len(dfs)):
         # Split stds from values
         stds      = dfs[i]['Cal. Curve'].unique().tolist()
@@ -157,9 +187,12 @@ def parseDICTNDOC(inFile):
         else:
             absDiff = (5 - drift['Conc.']).abs().max()
             cleanDFs[i]['Max % Abs. Diff of High Check'] = absDiff/5*100
-        # Add Reference 
+        # Add Reference
+        newname = 'Conc. ' + dfs[i]['Analysis(Inj.)'].unique()
+        cleanDFs[i].rename(columns={'Conc.':newname[0]},inplace=True)
         cleanDFs[i]['Raw File'] = inFile
-    return cleanDFs
+    cleaned = pd.concat(cleanDFs,ignore_index=True)
+    return cleaned
 ##-----------------------------------------------------------------------------
 ## Input Options
 ## One directory for each: PP, PCN, Nutrients, DIC, TN/DOC
@@ -174,4 +207,5 @@ inputFuncs  = [parsePP,parsePCN,parseDICTNDOC,parseDICTNDOC,parseNUT]
 ##-----------------------------------------------------------------------------
 ## Do the work
 a = buildMatrix(inputDirs,inputFuncs)
-#a = parseNUT('DSi July, 8.1.19.xls')
+b = buildNC(a,'potato')
+#a = parseStations('Station_List_Rev1_May2019 (1).xlsx')
