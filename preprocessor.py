@@ -85,19 +85,19 @@ def parsePP(inFile):
     return df
 
 def parsePCN(inFile):
-    colNames = ['SampleID','SampleWeight','N-Response','N-mg','N-percent',
-                   'C-Response','C-mg','C-percent']
     df = pullIn(inFile)
-    neededfill = len(df.columns)-len(colNames) # get num of columns
-    if neededfill > 0: #fill to the left if not enough column names
-        fill = ['potato']*neededfill
-        fill.extend(colNames)
-        colNames = fill
-        df.columns = colNames # rename columns
-        df = df.drop('potato',axis=1) # remove filled columns
-    else:
-        df.columns = colNames # rename columns
-    df = df[pd.to_numeric(df['N-mg'], errors='coerce').notnull()] #drop header2
+    dexy = [index for index, row in df.iterrows() if (col.str.isnumeric() for col in row)]
+    print(dexy)
+    #neededfill = len(df.columns)-len(colNames) # get num of columns
+    # if neededfill > 0: #fill to the left if not enough column names
+    #     fill = ['potato']*neededfill
+    #     fill.extend(colNames)
+    #     colNames = fill
+    #     df.columns = colNames # rename columns
+    #     df = df.drop('potato',axis=1) # remove filled columns
+    # else:
+    #     df.columns = colNames # rename columns
+    # df = df[pd.to_numeric(df['N-mg'], errors='coerce').notnull()] #drop header2
     df['Raw File'] = inFile
     return df
 
@@ -210,6 +210,6 @@ inputDirs   = [inputPCN,inputDIC,inputTNDOC,inputNUT]
 inputFuncs  = [parsePCN,parseDICTNDOC,parseDICTNDOC,parseNUT]
 ##-----------------------------------------------------------------------------
 ## Do the work
-a = buildMatrix(inputDirs,inputFuncs)
+#a = buildMatrix(inputDirs,inputFuncs)
 #b = buildNC(a,'potato')
-#a = parseNUT('Allison 020623A0.xls')
+a = parsePCN('Nick PCN 12_18_23.xlsx')
