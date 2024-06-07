@@ -194,6 +194,7 @@ def parseDICTNDOC(inFile):
             newname = 'Conc. ' + dfs[i]['Analysis(Inj.)'].unique()
             cleanDFs[i].rename(columns={'Conc.':newname[0]},inplace=True)
             cleanDFs[i]['Raw File'] = inFile
+    cleanDFs = {k:v for (k,v) in cleanDFs.items() if not v.empty}
     cleaned = pd.concat(cleanDFs,ignore_index=True)
     return cleaned
 ##-----------------------------------------------------------------------------
@@ -209,6 +210,6 @@ inputDirs   = [inputPCN,inputDIC,inputTNDOC,inputNUT]
 inputFuncs  = [parsePCN,parseDICTNDOC,parseDICTNDOC,parseNUT]
 ##-----------------------------------------------------------------------------
 ## Do the work
-#a = buildMatrix(inputDirs,inputFuncs)
+a = buildMatrix(inputDirs,inputFuncs)
 #b = buildNC(a,'potato')
-a = parseDICTNDOC('Chris TNDOC 012624 Detail.txt')
+#a = parseNUT('Allison 020623A0.xls')
