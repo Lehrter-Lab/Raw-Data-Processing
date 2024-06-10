@@ -4,10 +4,6 @@ import pandas as pd
 import os
 import numpy as np
 from sklearn.linear_model import LinearRegression
-import datetime as dt
-import xarray as xr
-import re
-import netCDF4 as nc
 
 ## For my sanity
 pd.options.mode.copy_on_write = True
@@ -48,14 +44,11 @@ def buildMatrix(inputDirs,inputFuncs):
 
 def buildNC(inputDict,outname):
     # Match station ids to loc
-    temp = pd.concat(inputDict.values(),ignore_index=True) # You are working with dict of dicts, not just dict
-    myXR = xr.Dataset(temp).to_array()
-    # Convert to netcdf
-    # xds = xarray.Dataset.from_dataframe(holder)
-    # xds = xds.set_coords(['Date','Station ID'])
-    # filename = outname + '.nc'
-    # xds.to_netcdf(filename,format="NETCDF4")
-    return myXR
+    df = {}
+    for key, item in inputDict.items():
+        temp = pd.concat(item.values(),ignore_index=True)
+        df[key] = temp
+    return df
 ##-----------------------------------------------------------------------------
 ## Handle data
 ## Cleans but does not QC
@@ -86,18 +79,17 @@ def parsePP(inFile):
 
 def parsePCN(inFile):
     df = pullIn(inFile)
-    dexy = [index for index, row in df.iterrows() if (col.str.isnumeric() for col in row)]
-    print(dexy)
-    #neededfill = len(df.columns)-len(colNames) # get num of columns
-    # if neededfill > 0: #fill to the left if not enough column names
-    #     fill = ['potato']*neededfill
-    #     fill.extend(colNames)
-    #     colNames = fill
-    #     df.columns = colNames # rename columns
-    #     df = df.drop('potato',axis=1) # remove filled columns
-    # else:
-    #     df.columns = colNames # rename columns
-    # df = df[pd.to_numeric(df['N-mg'], errors='coerce').notnull()] #drop header2
+    for index, row in df.iterrows():
+        temp = row.astype(str).str.isnumeric()
+        if any(temp):
+            break
+    if index > 0:
+        currentH = df.columns.to_list()
+        toAdd    = df.iloc[index-1].to_list()
+        a        = ['' if pd.isnull(x) else ' ' + x for x in toAdd]
+        newH     = [m+str(n) for m,n in zip(currentH,a)]
+        df.columns = newH
+        df.drop(index-1,inplace=True)
     df['Raw File'] = inFile
     return df
 
@@ -186,7 +178,7 @@ def parseDICTNDOC(inFile):
             drift = drift[drift['Conc.'] > 1.5] # Scrub empty vials
             if 'IC' in drift['Anal.'].unique():
                 absDiff = (20 - drift['Conc.']).abs().max()
-                cleanDFs[i]['Max Deviation of High Check (%)'] = absDiff/20*100
+                cleanDFs[i]['Max % Abs. Diff of High Check'] = absDiff/20*100
             else:
                 absDiff = (5 - drift['Conc.']).abs().max()
                 cleanDFs[i]['Max % Abs. Diff of High Check'] = absDiff/5*100
@@ -203,13 +195,13 @@ def parseDICTNDOC(inFile):
 inputPP     = 'PP'
 inputPCN    = 'PCN'
 inputDIC    = 'DIC'
-inputTNDOC  = 'TN-DOC'
-inputNUT    = 'Nutrients'
+inputTNDOC  = 'TNDOC'
+inputNUT    = 'NUT'
 
 inputDirs   = [inputPCN,inputDIC,inputTNDOC,inputNUT]
 inputFuncs  = [parsePCN,parseDICTNDOC,parseDICTNDOC,parseNUT]
 ##-----------------------------------------------------------------------------
 ## Do the work
-#a = buildMatrix(inputDirs,inputFuncs)
-#b = buildNC(a,'potato')
-a = parsePCN('Nick PCN 12_18_23.xlsx')
+a = buildMatrix(inputDirs,inputFuncs)
+b = buildNC(a,'potato')
+#a = parsePCN('Nick PCN 12_18_23.xlsx')
