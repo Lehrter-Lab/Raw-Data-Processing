@@ -43,7 +43,7 @@ def buildMatrix(inputDirs,inputFuncs):
             print("Error in: ",inputDirs[i])
     return dfs
 
-def buildFinal(inputDict,outname,outpath):
+def buildFinal(inputDict,outpath):
     # Match station ids to loc
     df = {}
     for key, item in inputDict.items():
@@ -201,8 +201,10 @@ inputNUT    = 'NUT'
 
 inputDirs   = [inputPCN,inputDIC,inputTNDOC,inputNUT]
 inputFuncs  = [parsePCN,parseDICTNDOC,parseDICTNDOC,parseNUT]
+
+outpath = 'master.xlsx'
 ##-----------------------------------------------------------------------------
 ## Do the work
 a = buildMatrix(inputDirs,inputFuncs)
-b = buildFinal(a,'potato','product.xlsx')
+b = buildFinal(a,outpath)
 #a = parseDICTNDOC('TNDOC\Chris TNDOC 012624 Detail.txt')
