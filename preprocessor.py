@@ -37,17 +37,21 @@ def buildMatrix(inputDirs,inputFuncs):
     dfs = {}
     for i in range(len(inputDirs)):
         try:
-            dfs[i] = maketheDF(inputDirs[i],inputFuncs[i])
+            key      = inputDirs[i].replace('input', '')
+            dfs[key] = maketheDF(inputDirs[i],inputFuncs[i])
         except:
             print("Error in: ",inputDirs[i])
     return dfs
 
-def buildNC(inputDict,outname):
+def buildFinal(inputDict,outname,outpath):
     # Match station ids to loc
     df = {}
     for key, item in inputDict.items():
         temp = pd.concat(item.values(),ignore_index=True)
         df[key] = temp
+    with pd.ExcelWriter(outpath) as writer:
+        for key in df:
+            df[key].to_excel(writer, sheet_name=key,index = False)
     return df
 ##-----------------------------------------------------------------------------
 ## Handle data
@@ -200,5 +204,5 @@ inputFuncs  = [parsePCN,parseDICTNDOC,parseDICTNDOC,parseNUT]
 ##-----------------------------------------------------------------------------
 ## Do the work
 a = buildMatrix(inputDirs,inputFuncs)
-b = buildNC(a,'potato')
+b = buildFinal(a,'potato','product.xlsx')
 #a = parseDICTNDOC('TNDOC\Chris TNDOC 012624 Detail.txt')
