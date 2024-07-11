@@ -123,8 +123,11 @@ def parseDICTNDOC(inFile):
     originalCols   = ['Type','Anal.','Sample Name','Sample ID','Origin',
                       'Cal. Curve','Manual Dilution','Notes','Date / Time',
                       'Spl. No.','Inj. No.','Analysis(Inj.)','Area','Conc.',
-                      'Result','Excluded','Inj. Vol.']	
+                      'Result','Excluded','Inj. Vol.']
+    checkNames     = ['QC','Q','L','H'] # Possible check 'Sample Names'
+    checkIDsHigh   = ['H']              # Possible high check 'Sample IDs'
     df = pullIn(inFile)
+    drift
     # Handle column names
     neededfill = len(df.columns)-len(originalCols) # get num of columns
     if neededfill > 0: #fill to the left if not enough column names
@@ -140,7 +143,7 @@ def parseDICTNDOC(inFile):
                 (~df['Sample ID'].str.contains('Rinse',na=False))]
     except:
         df = df[~df['Sample Name'].str.contains('Rinse',na=False)]
-    ## Split into analyte groups
+    ## Split df into dict of dfs based on analyte groups
     df['grouper'] = np.where(df['Type'].eq('Unknown'),df['Cal. Curve'],df['Origin'])
     gb  = df.groupby('grouper') # Groupby analytes
     dfs = [gb.get_group(x) for x in gb.groups]
@@ -152,7 +155,6 @@ def parseDICTNDOC(inFile):
         stdAreas  = dfs[i][dfs[i]['Origin'].eq(realstds)]
         dfs[i]    = dfs[i][dfs[i]['Cal. Curve'].notna()]
         # Get mean concentrations
-        checkNames  = ['QC','Q','L','H'] # Possible check names
         cleanDFs[i] = dfs[i].filter(keepCols, axis=1)
         if cleanDFs[i].empty:
             pass
@@ -167,21 +169,16 @@ def parseDICTNDOC(inFile):
                 model.fit(x, y)
                 r2_score = model.score(x, y)
                 cleanDFs[i]['r-sq.'] = r2_score
+                highStd = max(x['Conc.'])
+                checkIDsHigh.append(str(int(highStd)))
             except:
                 cleanDFs[i]['r-sq.'] = "No curve available"
             # Get drift
-            try:
-                drift = dfs[i][(dfs[i]['Sample ID'].str.contains('5',na=False)) | 
-                                (dfs[i]['Sample Name'].str.contains('H',na=False))]
-            except:
-                drift = dfs[i][dfs[i]['Sample Name'].str.contains('H',na=False)]
+            drift = dfs[i][(dfs[i]['Sample ID'].isin(checkIDsHigh)) | 
+                           (dfs[i]['Sample Name'].isin(checkIDsHigh))]
             drift = drift[drift['Conc.'] > 1.5] # Scrub empty vials
-            if 'IC' in drift['Anal.'].unique():
-                absDiff = (20 - drift['Conc.']).abs().max()
-                cleanDFs[i]['Max % Abs. Diff of High Check'] = absDiff/20*100
-            else:
-                absDiff = (5 - drift['Conc.']).abs().max()
-                cleanDFs[i]['Max % Abs. Diff of High Check'] = absDiff/5*100
+            absDiff = (highStd - drift['Conc.']).abs().max()
+            cleanDFs[i]['Max % Abs. Diff of High Check'] = absDiff/highStd*100
             # Add Reference
             newname = 'Conc. ' + dfs[i]['Analysis(Inj.)'].unique()
             cleanDFs[i].rename(columns={'Conc.':newname[0]},inplace=True)
@@ -204,4 +201,4 @@ inputFuncs  = [parsePCN,parseDICTNDOC,parseDICTNDOC,parseNUT]
 ## Do the work
 a = buildMatrix(inputDirs,inputFuncs)
 b = buildNC(a,'potato')
-#a = parsePCN('Nick PCN 12_18_23.xlsx')
+#a = parseDICTNDOC('TNDOC\Chris TNDOC 012624 Detail.txt')
