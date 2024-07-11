@@ -129,7 +129,7 @@ def parseDICTNDOC(inFile):
                       'Spl. No.','Inj. No.','Analysis(Inj.)','Area','Conc.',
                       'Result','Excluded','Inj. Vol.']
     checkNames     = ['QC','Q','L','H'] # Possible check 'Sample Names'
-    checkIDsHigh   = ['H']              # Possible high check 'Sample IDs'
+    checkIDsHigh   = ['Spike','H']              # Possible high check 'Sample IDs'
     df = pullIn(inFile)
     drift
     # Handle column names
@@ -207,4 +207,4 @@ outpath = 'master.xlsx'
 ## Do the work
 a = buildMatrix(inputDirs,inputFuncs)
 b = buildFinal(a,outpath)
-#a = parseDICTNDOC('TNDOC\Chris TNDOC 012624 Detail.txt')
+# a = parseDICTNDOC('DIC/Chris DIC 0120623 Detail.txt')
