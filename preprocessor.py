@@ -4,6 +4,7 @@ import pandas as pd
 import os
 import numpy as np
 from sklearn.linear_model import LinearRegression
+import matplotlib.pyplot as plt
 
 ## For my sanity
 pd.options.mode.copy_on_write = True
@@ -23,9 +24,9 @@ def pullIn(inFile):
 def maketheDF(directory,analFunc):
     dfs = {}
     home = os.getcwd()
-    path = os.path.join(home,directory)
+    pathy = os.path.join(home,directory)
     for file in os.listdir(directory):
-        pathF = os.path.join(path,file)
+        pathF = os.path.join(pathy,file)
         try:
             df = analFunc(pathF)
             dfs[file] = df
@@ -175,6 +176,29 @@ def parseDICTNDOC(inFile):
                 cleanDFs[i]['r-sq.'] = r2_score
                 highStd = max(x['Conc.'])
                 checkIDsHigh.append(str(int(highStd)))
+                # Make figs
+                ypred = model.predict(x)
+                plt.scatter(x,y,color="black")
+                if r2_score < 0.9990:
+                    plt.plot(x,ypred,color="red")
+                else:
+                    plt.plot(x,ypred,color="blue")
+                r2_text = r'$R^2 =$' + str(round(r2_score,4))
+                plt.annotate(r2_text, xy=(0.25,0.75), xycoords='figure fraction', 
+                             horizontalalignment='left', verticalalignment='top')
+                plt.xlabel('Std Conc.')
+                plt.ylabel('Area')
+                # Save figs
+                currentpath = os.path.dirname(inFile)
+                newpath     = currentpath + '\\QA_figs\\'
+                if not os.path.exists(newpath):
+                    os.makedirs(newpath)
+                basename    = os.path.basename(inFile)
+                file,ext    = os.path.splitext(basename)
+                savename    = newpath + file + '.png'
+                plt.savefig(savename,dpi=200)
+                #plt.show()
+                plt.close()
             except:
                 cleanDFs[i]['r-sq.'] = "No curve available"
             # Get drift
@@ -196,11 +220,11 @@ def parseDICTNDOC(inFile):
 inputPP     = 'PP'
 inputPCN    = 'PCN'
 inputDIC    = 'DIC'
-inputTNDOC  = 'TNDOC'
+inputTNDOC  = 'TN-DOC'
 inputNUT    = 'NUT'
 
-inputDirs   = [inputPCN,inputDIC,inputTNDOC,inputNUT]
-inputFuncs  = [parsePCN,parseDICTNDOC,parseDICTNDOC,parseNUT]
+inputDirs   = [inputTNDOC]
+inputFuncs  = [parseDICTNDOC]
 
 outpath = 'master.xlsx'
 ##-----------------------------------------------------------------------------
