@@ -5,6 +5,7 @@ import os
 import numpy as np
 from sklearn.linear_model import LinearRegression
 import matplotlib.pyplot as plt
+import datetime as dt
 
 ## For my sanity
 pd.options.mode.copy_on_write = True
@@ -130,9 +131,8 @@ def parseDICTNDOC(inFile):
                       'Spl. No.','Inj. No.','Analysis(Inj.)','Area','Conc.',
                       'Result','Excluded','Inj. Vol.']
     checkNames     = ['QC','Q','L','H'] # Possible check 'Sample Names'
-    checkIDsHigh   = ['Spike','H']              # Possible high check 'Sample IDs'
+    checkIDsHigh   = ['Spike','H']      # Possible high check 'Sample IDs'
     df = pullIn(inFile)
-    drift
     # Handle column names
     neededfill = len(df.columns)-len(originalCols) # get num of columns
     if neededfill > 0: #fill to the left if not enough column names
@@ -154,6 +154,8 @@ def parseDICTNDOC(inFile):
     dfs = [gb.get_group(x) for x in gb.groups]
     cleaned=[]
     for i in range(len(dfs)):
+        breaker = 0
+        anal    = dfs[i]['Analysis(Inj.)'].unique()
         # Split stds from values
         stds      = dfs[i]['Cal. Curve'].unique().tolist()
         realstds  = stds[-1]
@@ -168,26 +170,59 @@ def parseDICTNDOC(inFile):
             cleanDFs[i] = cleanDFs[i].groupby("Sample Name").mean().reset_index()
             # Do linear regression
             try:
-                x = stdAreas[['Conc.']]
-                y = stdAreas['Area']
+                # Cal. Curve
+                x     = stdAreas[['Conc.']]
+                y     = stdAreas['Area']
                 model = LinearRegression()
                 model.fit(x, y)
                 r2_score = model.score(x, y)
                 cleanDFs[i]['r-sq.'] = r2_score
                 highStd = max(x['Conc.'])
                 checkIDsHigh.append(str(int(highStd)))
-                # Make figs
-                ypred = model.predict(x)
-                plt.scatter(x,y,color="black")
+                ypred   = model.predict(x)
+            except:
+                cleanDFs[i]['r-sq.'] = "No curve available"
+                breaker = 1
+            # Get drift
+            drift = dfs[i][(dfs[i]['Sample ID'].isin(checkIDsHigh)) | 
+                           (dfs[i]['Sample Name'].isin(checkIDsHigh))]
+            drift = drift[drift['Conc.'] > 1.5] # Scrub empty vials
+            absDiff = (highStd - drift['Conc.']).abs().max()
+            cleanDFs[i]['Max % Abs. Diff of High Check'] = absDiff/highStd*100
+            # Linear regression for low drift
+            try:
+                xtimes = pd.to_datetime(drift['Date / Time'],format="%m/%d/%Y %I:%M:%S %p")
+                xt = xtimes[0:]-xtimes.iat[0]
+                xt = xt.dt.total_seconds()/(60*60)
+                x1 = xt.values
+                x1 = x1.reshape(len(x1),1)
+                y1 = drift['Conc.']
+                # print(x1)
+                model1 = LinearRegression()
+                model1.fit(x1,y1)
+                y1pred = model1.predict(x1)
+            except:
+                breaker = 1
+            # Make figs -------------------------------------------------------
+            if breaker != 1:
+                fig, axs = plt.subplots(2)
+                axs[0].scatter(x,y,marker='o',facecolors='none',color="black")
                 if r2_score < 0.9990:
-                    plt.plot(x,ypred,color="red")
+                    colour="red"
                 else:
-                    plt.plot(x,ypred,color="blue")
+                    colour="blue"
+                axs[0].plot(x,ypred,color=colour)
                 r2_text = r'$R^2 =$' + str(round(r2_score,4))
-                plt.annotate(r2_text, xy=(0.25,0.75), xycoords='figure fraction', 
+                axs[0].annotate(r2_text, xy=(0.25,0.85), xycoords='figure fraction', 
                              horizontalalignment='left', verticalalignment='top')
-                plt.xlabel('Std Conc.')
-                plt.ylabel('Area')
+                axs[0].set_ylabel('Signal Area')
+                axs[0].set_xlabel(anal[0]+' Std Conc.')
+                axs[1].scatter(xt,y1,marker='o',facecolors='none',color='black')
+                axs[1].plot(xt,y1pred,color='black',linestyle='--')
+                axs[1].set_ylim(0,highStd+1)
+                axs[1].set_ylabel(anal[0]+' Conc.')
+                axs[1].set_xlabel('Elapsed Hours')
+                fig.tight_layout()
                 # Save figs
                 currentpath = os.path.dirname(inFile)
                 newpath     = currentpath + '\\QA_figs\\'
@@ -195,20 +230,12 @@ def parseDICTNDOC(inFile):
                     os.makedirs(newpath)
                 basename    = os.path.basename(inFile)
                 file,ext    = os.path.splitext(basename)
-                savename    = newpath + file + '.png'
+                savename    = newpath + file + anal + '.png'
                 plt.savefig(savename,dpi=200)
-                #plt.show()
+                plt.show()
                 plt.close()
-            except:
-                cleanDFs[i]['r-sq.'] = "No curve available"
-            # Get drift
-            drift = dfs[i][(dfs[i]['Sample ID'].isin(checkIDsHigh)) | 
-                           (dfs[i]['Sample Name'].isin(checkIDsHigh))]
-            drift = drift[drift['Conc.'] > 1.5] # Scrub empty vials
-            absDiff = (highStd - drift['Conc.']).abs().max()
-            cleanDFs[i]['Max % Abs. Diff of High Check'] = absDiff/highStd*100
-            # Add Reference
-            newname = 'Conc. ' + dfs[i]['Analysis(Inj.)'].unique()
+            # Add Reference ---------------------------------------------------
+            newname = 'Conc. ' + anal
             cleanDFs[i].rename(columns={'Conc.':newname[0]},inplace=True)
             cleanDFs[i]['Raw File'] = inFile
     cleanDFs = {k:v for (k,v) in cleanDFs.items() if not v.empty}
@@ -220,7 +247,7 @@ def parseDICTNDOC(inFile):
 inputPP     = 'PP'
 inputPCN    = 'PCN'
 inputDIC    = 'DIC'
-inputTNDOC  = 'TN-DOC'
+inputTNDOC  = 'TNDOC'
 inputNUT    = 'NUT'
 
 inputDirs   = [inputTNDOC]
