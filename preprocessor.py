@@ -231,6 +231,7 @@ def parseDICTNDOC(inFile):
                 basename    = os.path.basename(inFile)
                 file,ext    = os.path.splitext(basename)
                 savename    = newpath + file.replace(" ", "_") + "_" + anal + '.png'
+                savename    = savename[0]
                 plt.savefig(savename,dpi=200)
                 plt.show()
                 plt.close()
