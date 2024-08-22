@@ -219,7 +219,7 @@ def parseDICTNDOC(inFile):
                 axs[0].set_xlabel(anal[0]+' Std Conc.')
                 axs[1].scatter(xt,y1,marker='o',facecolors='none',color='black')
                 axs[1].plot(xt,y1pred,color='black',linestyle='--')
-                axs[1].set_ylim(0,highStd+1)
+                axs[1].set_ylim(0,highStd*1.2)
                 axs[1].set_ylabel(anal[0]+' Conc.')
                 axs[1].set_xlabel('Elapsed Hours')
                 fig.tight_layout()
