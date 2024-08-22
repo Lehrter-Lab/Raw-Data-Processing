@@ -2,6 +2,9 @@
 
 This repository contains all necessary scripts for processing outputs by lab & field instrumentation. All higher functions should be contained with the repository of the project they were written for.
 
+## Preprocessor Script
+Python alternative for Shimadzu TOC-V script with additional functionality for all other water quality analytes.
+
 ## Shimadzu TOC-V scripts
 ShimadzuTOC-V is deprecated. DICTNDOC should be used instead for TOC-V data.
 
