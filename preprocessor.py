@@ -32,7 +32,7 @@ def maketheDF(directory,analFunc):
             df = analFunc(pathF)
             dfs[file] = df
         except:
-            print(pathF)
+            print('Error with: ',pathF,' using ',analFunc)
     return dfs
 
 def buildMatrix(inputDirs,inputFuncs):
