@@ -184,11 +184,14 @@ def parseDICTNDOC(inFile):
                 cleanDFs[i]['r-sq.'] = "No curve available"
                 breaker = 1
             # Get drift
-            drift = dfs[i][(dfs[i]['Sample ID'].isin(checkIDsHigh)) | 
-                           (dfs[i]['Sample Name'].isin(checkIDsHigh))]
-            drift = drift[drift['Conc.'] > 1.5] # Scrub empty vials
-            absDiff = (highStd - drift['Conc.']).abs().max()
-            cleanDFs[i]['Max % Abs. Diff of High Check'] = absDiff/highStd*100
+            try:
+                drift = dfs[i][(dfs[i]['Sample ID'].isin(checkIDsHigh)) | 
+                               (dfs[i]['Sample Name'].isin(checkIDsHigh))]
+                drift = drift[drift['Conc.'] > 1.5] # Scrub empty vials
+                absDiff = (highStd - drift['Conc.']).abs().max()
+                cleanDFs[i]['Max % Abs. Diff of High Check'] = absDiff/highStd*100
+            except:
+                pass
             # Linear regression for low drift
             try:
                 xtimes = pd.to_datetime(drift['Date / Time'],format="%m/%d/%Y %I:%M:%S %p")
@@ -251,12 +254,12 @@ inputDIC    = 'DIC'
 inputTNDOC  = 'TNDOC'
 inputNUT    = 'NUT'
 
-inputDirs   = [inputTNDOC]
-inputFuncs  = [parseDICTNDOC]
+inputDirs   = [inputTNDOC,inputDIC]
+inputFuncs  = [parseDICTNDOC,parseDICTNDOC]
 
 outpath = 'master.xlsx'
 ##-----------------------------------------------------------------------------
 ## Do the work
 a = buildMatrix(inputDirs,inputFuncs)
 b = buildFinal(a,outpath)
-# a = parseDICTNDOC('DIC/Chris DIC 0120623 Detail.txt')
+# a = parseDICTNDOC('DIC\Chris DIC 051523 Detail - 1362 Was Empty.txt')
