@@ -5,6 +5,9 @@ This repository contains all necessary scripts for processing outputs by lab & f
 ## Preprocessor Script
 Python alternative for Shimadzu TOC-V script with additional functionality for all other water quality analytes.
 
+## Olivia-Bot
+This script grabs preprocessor script output for TNDOC and compares it to the master sheet (you need to download this yourself). It then updates the sheet with any new values from the preprocessor output and returns it as a new spreadsheet.
+
 ## Shimadzu TOC-V scripts
 ShimadzuTOC-V is deprecated. DICTNDOC should be used instead for TOC-V data.
 
