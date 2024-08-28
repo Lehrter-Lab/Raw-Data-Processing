@@ -30,3 +30,10 @@ e['TN']  = e['TN'].fillna(e['TN_y'])
 e['DOC'] = e['DOC'].fillna(e['DOC_y'])
 e.drop(columns=['DOC_y','TN_y'],inplace=True)
 e.to_excel("output.xlsx")
+
+# QA
+qc = [c['TN'].count(),c['DOC'].count(),b['TN'].count(),b['DOC'].count(),
+      e['TN'].count(),e['DOC'].count()]
+QA = pd.DataFrame(data=[qc],columns=['cTN','cDOC','bTN','bDOC','eTN','eDOC'])
+QA['newTNe']  = QA['eTN']-QA['cTN']
+QA['newDOCe'] = QA['eDOC']-QA['cDOC']
