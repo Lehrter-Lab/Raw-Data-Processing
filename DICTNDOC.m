@@ -30,9 +30,9 @@ for k = 1 : length(theFiles)
 
     opts = detectImportOptions(filename);
     % set column 3 (named 'SampleName' and 'SampleID') data to type 'char', i.e. import it as a character array
-    opts.VariableTypes{1,3} = 'char';
-    opts.VariableTypes{1,4} = 'char';
+    opts = setvartype(opts,{'SampleName', 'SampleID'},'char');
     % set time units
+    opts = setvartype(opts,{'Date_Time'},'datetime');
     opts = setvaropts(opts,'Date_Time','InputFormat','MM/dd/uuuu hh:mm:ss aa');
     DATA = readtable(filename, opts);
     %% Clean Data
