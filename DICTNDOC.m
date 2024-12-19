@@ -1,14 +1,16 @@
 % Generalized script for Shimadzu Outputs
 % CMikolaitis, 2022
 
-%%%%%%% RUN THIS SCRIPT AS ADMIN
+%%%%%%% RUN THIS SCRIPT AS ADMIN @ DISL
 
 clear, clc, %clc
 warning off
-%% Choose auto or single
+%% Script options
+newinstrument = 1; % 0 for old
 
-switcher = 0; % 0 for manual
-manualName = ['Chris TNDOC 012624 Detail.txt'];
+%% Choose auto or single
+switcher = 0;      % 0 for manual
+manualName = ['121224 DIC Jonae detailed.txt'];
 
 inputFolder = 'C:\Users\cmikolaitis\Documents\TOC_Data'; % Make sure input files are here
 filePattern = fullfile(inputFolder,'*.txt');
@@ -33,7 +35,11 @@ for k = 1 : length(theFiles)
     opts = setvartype(opts,{'SampleName', 'SampleID'},'char');
     % set time units
     opts = setvartype(opts,{'Date_Time'},'datetime');
-    opts = setvaropts(opts,'Date_Time','InputFormat','MM/dd/uuuu hh:mm:ss aa');
+    if newinstrument == 0
+        opts = setvaropts(opts,'Date_Time','InputFormat','MM/dd/uuuu hh:mm:ss aa');
+    else
+        opts = setvaropts(opts,'Date_Time','InputFormat','uuuu/MM/dd HH:mm:ss');
+    end
     DATA = readtable(filename, opts);
     %% Clean Data
     % Clean up blanks at start
@@ -172,16 +178,16 @@ for k = 1 : length(theFiles)
             y2 = y(2:2:end,:);
             text(t,y,Sample_name_ID_unique(idx_QA == 0));
             ymax = round(max(y(:))*1.2);
+            plot(t1,y1,'-ok')
+            hold on
+            plot(t2,y2,'-dk')
+            legend({"Low Std","High Std"},"Location","best")
         else
-            t = 0;
-            y = 0;
+            t = 0.2;
+            y = 0.4;
             text(t,y,'DRIFT CHECK NOT AVAILABLE');
             ymax = round(max(y(:))+1);
         end
-        plot(t1,y1,'-ok')
-        hold on
-        plot(t2,y2,'-dk')
-        legend({"Low Std","High Std"},"Location","best")
 
         set(gca,'ylim',[0 ymax])
         title([{'Check this figure to ensure there is no serious drift'};...
