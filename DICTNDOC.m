@@ -33,7 +33,7 @@ for k = 1 : length(theFiles)
     opts.VariableTypes{1,3} = 'char';
     opts.VariableTypes{1,4} = 'char';
     % set time units
-    opts = setvaropts(opts,opts.VariableNames(9),'InputFormat','MM/dd/uuuu hh:mm:ss aa');
+    opts = setvaropts(opts,'Date_Time','InputFormat','MM/dd/uuuu hh:mm:ss aa');
     DATA = readtable(filename, opts);
     %% Clean Data
     % Clean up blanks at start
