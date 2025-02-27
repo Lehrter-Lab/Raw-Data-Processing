@@ -16,9 +16,12 @@ def pullIn(inFile):
         df = pd.read_excel(inFile)
     else:
         try:
-            df = pd.read_csv(inFile, delimiter='\t',skiprows=13)
+            df = pd.read_csv(inFile, delimiter='\t',header=11)
         except:
-            df = pd.read_csv(inFile)
+            try:
+                df = pd.read_csv(inFile, delimiter='\t',header=8, encoding="utf-16")
+            except:
+                df = pd.read_csv(inFile)
     df.dropna(thresh=2,inplace=True) # cut rows with less than 2 values
     return df
 
@@ -134,22 +137,24 @@ def parseDICTNDOC(inFile):
     checkIDsHigh   = ['Spike','H']      # Possible high check 'Sample IDs'
     df = pullIn(inFile)
     # Handle column names
-    neededfill = len(df.columns)-len(originalCols) # get num of columns
-    if neededfill > 0: #fill to the left if not enough column names
-        fill = ['potato']*neededfill
-        originalCols.extend(fill)
-        df.columns = originalCols # rename columns
-        df = df.drop('potato',axis=1) # remove filled columns
-    else:
-        df.columns = originalCols # rename columns
+    # neededfill = len(df.columns)-len(originalCols) # get num of columns
+    # if neededfill > 0: #fill to the left if not enough column names
+    #     fill = ['potato']*neededfill
+    #     originalCols.extend(fill)
+    #     df.columns = originalCols # rename columns
+    #     df = df.drop('potato',axis=1) # remove filled columns
+    # else:
+    #     df.columns = originalCols # rename columns
+    # Remove excluded reads & rinses
     df = df[df.Excluded == 0] # Clean flagged reads
     try:
         df = df[(~df['Sample Name'].str.contains('Rinse',na=False)) & 
                 (~df['Sample ID'].str.contains('Rinse',na=False))]
     except:
         df = df[~df['Sample Name'].str.contains('Rinse',na=False)]
-    ## Split df into dict of dfs based on analyte groups
-    df['grouper'] = np.where(df['Type'].eq('Unknown'),df['Cal. Curve'],df['Origin'])
+    # Split df into dict of dfs based on analyte groups
+    df['grouper'] = df['Cal. Curve']
+    df['grouper'] = df['grouper'].fillna(df['Origin'])
     gb  = df.groupby('grouper') # Groupby analytes
     dfs = [gb.get_group(x) for x in gb.groups]
     cleaned=[]
@@ -161,7 +166,7 @@ def parseDICTNDOC(inFile):
         realstds  = stds[-1]
         stdAreas  = dfs[i][dfs[i]['Origin'].eq(realstds)]
         dfs[i]    = dfs[i][dfs[i]['Cal. Curve'].notna()]
-        # Get mean concentrations
+        # Get mean concentrations of unknowns
         cleanDFs[i] = dfs[i].filter(keepCols, axis=1)
         if cleanDFs[i].empty:
             pass
@@ -194,7 +199,10 @@ def parseDICTNDOC(inFile):
                 pass
             # Linear regression for low drift
             try:
-                xtimes = pd.to_datetime(drift['Date / Time'],format="%m/%d/%Y %I:%M:%S %p")
+                try:
+                    xtimes = pd.to_datetime(drift['Date / Time'],format="%m/%d/%Y %I:%M:%S %p")
+                except:
+                    xtimes = pd.to_datetime(drift['Date / Time'],format="%Y/%m/%d %H:%M:%S")
                 xt = xtimes[0:]-xtimes.iat[0]
                 xt = xt.dt.total_seconds()/(60*60)
                 x1 = xt.values
@@ -237,8 +245,7 @@ def parseDICTNDOC(inFile):
                 savename    = savename[0]
                 plt.savefig(savename,dpi=200)
                 plt.show()
-                plt.close()
-            # Add Reference ---------------------------------------------------
+                plt.close()        
             newname = 'Conc. ' + anal
             cleanDFs[i].rename(columns={'Conc.':newname[0]},inplace=True)
             cleanDFs[i]['Raw File'] = inFile
@@ -260,6 +267,6 @@ inputFuncs  = [parseDICTNDOC,parseDICTNDOC]
 outpath = 'master.xlsx'
 ##-----------------------------------------------------------------------------
 ## Do the work
-a = buildMatrix(inputDirs,inputFuncs)
-b = buildFinal(a,outpath)
-# a = parseDICTNDOC('DIC\Chris DIC 051523 Detail - 1362 Was Empty.txt')
+# a = buildMatrix(inputDirs,inputFuncs)
+# b = buildFinal(a,outpath)
+c = parseDICTNDOC('DIC/021125 DIC Jonae NR.txt')
