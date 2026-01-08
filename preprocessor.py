@@ -196,7 +196,7 @@ def parseDICTNDOC(inFile):
                 absDiff = (highStd - drift['Conc.']).abs().max()
                 cleanDFs[i]['Max % Abs. Diff of High Check'] = absDiff/highStd*100
             except:
-                pass
+                print("Could not generate QC figures, check naming convention.")
             # Linear regression for low drift
             try:
                 try:
@@ -270,3 +270,4 @@ outpath = 'master.xlsx'
 # a = buildMatrix(inputDirs,inputFuncs)
 # b = buildFinal(a,outpath)
 c = parseDICTNDOC('DIC/021125 DIC Jonae NR.txt')
+
