@@ -16,10 +16,12 @@ MASTER_MAP = {# identifiers / cruise metadata
               "year":      "year",
               
               # time
-              "date": "date",
-              "time": "time",
+              "date":         "date",
+              "time (local)": "time_local",
+              "time (utc)":   "time_utc",
               
               # station / location
+              "station":              "station_id",
               "station id":           "station_id",
               "station type":         "station_type",
               "latitude":             "latitude",
@@ -40,35 +42,38 @@ MASTER_MAP = {# identifiers / cruise metadata
               "ctd":   "CTD_number",
               
               # physical
-              "temp":             "Temp_C",
-              "temperature":      "Temp_C",
-              "do":               "DO_mg_L",
-              "dissolved oxygen": "DO_mg_L",
-              "salinity":         "Salinity",
-              "ph":               "pH",
+              "temp (c)":                "Temp_C",
+              "temperature (c)":         "Temp_C",
+              "do (mg/l)":               "DO_mg_L",
+              "dissolved oxygen (mg/l)": "DO_mg_L",
+              "do (%)":                  "DO_%",
+              "conductivity (spc)":      "Conductivity_SPC_µS_cm",
+              "salinity (psu)":          "Salinity_PSU",
+              "ph":                      "pH",
               
               # carbon system
-              "dic": "DIC",
-              "doc": "DOC",
+              "dic (ppm)":  "DIC_ppm",
+              "doc (ppm)":  "NPOC_ppm",
+              "npoc (ppm)": "NPOC_ppm",
               
               # nutrients
-              "no3 no2": "NO3_NO2",
-              "no3+no2": "NO3_NO2",
-              "no3":  "NO3",
-              "no2":  "NO2",
-              "nh4":  "NH4",
-              "po4":  "PO4",
-              "d si": "DSi",
-              "dsi":  "DSi",
-              "nitrogen concentration (ug/l)": "Nitrogen_ug_L",
-              "carbon concentration (ug/l)":   "Carbon_ug_L",
-              "tn":  "TN",
-              "pp":  "PP",
-              "tdp": "TDP",
+              "no3 no2 (µm)":   "NO3_NO2_µM",
+              "no3+no2 (µm)":   "NO3_NO2_µM",
+              "no3 (µm)":       "NO3_µM",
+              "no2 (µm)":       "NO2_µM",
+              "nh4 (µm)":       "NH4_µM",
+              "po4 (µm)":       "PO4_µM",
+              "d si (µm)":      "DSi_µM",
+              "dsi (µm)":       "DSi_µM",
+              "nitrogen concentration (ug/l)": "Nitrogen_µg_L",
+              "carbon concentration (ug/l)":   "Carbon_µg_L",
+              "tn (ppm)":       "TN_ppm",
+              "pp (µm)":        "PP_µM",
+              "tdp (µm)":       "TDP_µM",
               
               # other
-              "chla (ug/l)":              "Chla_ug_l",
-              "chlorophyll a":            "Chla_ug_L",
+              "chla (ug/l)":              "Chla_µg_l",
+              "chlorophyll a":            "Chla_µg_L",
               "tss concentration (mg/l)": "TSS_mg_L",
 
               # misc
@@ -77,7 +82,9 @@ MASTER_MAP = {# identifiers / cruise metadata
 
 STATION_MAP = {"station id":                "station_id",
                "off shore sites":           "station_id",
+               "latitude":                  "latitude",
                "lat":                       "latitude",
+               "longitude":                 "longitude",
                "lon":                       "longitude",
                "station type":              "station_type",
                "node (schism)":             "node_schism",
@@ -91,8 +98,9 @@ DTYPES = {# identifiers
           "year":      int,
           
           # time
-          "date":     str,
-          "time":     str,
+          "date":           str,
+          "time_local":     str,
+          "time_utc":       str,
           "datetime": "datetime64[ns]",
           
           # station / location
@@ -115,27 +123,29 @@ DTYPES = {# identifiers
           "CTD_number": str,
           
           # physical
-          "Temp_C":   float,
-          "DO_mg_L":  float,
-          "Salinity": float,
-          "pH":       float,
+          "Temp_C":                 float,
+          "DO_%":                   float,
+          "DO_mg_L":                float,
+          "Salinity_PSU":           float,
+          "Conductivity_SPC_µS_cm": float,
+          "pH":                     float,
           
           # carbon
-          "DIC": float,
-          "DOC": float,
+          "DIC_ppm":  float,
+          "NPOC_ppm": float,
           
           # nutrients
-          "NO3_NO2": float,
-          "NO3":     float,
-          "NO2":     float,
-          "NH4":     float,
-          "PO4":     float,
-          "DSi":     float,
+          "NO3_NO2_µM": float,
+          "NO3_µM":     float,
+          "NO2_µM":     float,
+          "NH4_µM":     float,
+          "PO4_µM":     float,
+          "DSi_µM":     float,
           "Nitrogen_ug_L": float,
           "Carbon_ug_L":   float,
-          "TN":  float,
-          "PP":  float,
-          "TDP": float,
+          "TN_ppm":  float,
+          "PP_µM":  float,
+          "TDP_µM": float,
           
           # other
           "Chla_ug_L": float,
@@ -148,7 +158,7 @@ DTYPES = {# identifiers
 
 ##-----------------------------------------------------------------------------
 # Check if there are some inconsistencies in the columns
-def check_columns_consistency(data_dir, sheet_filter=lambda s: True, rename_map=None):
+def check_columns_consistency(data_dir, sheet_filter=lambda s: True, rename_map=None,name=None):
     """
     Parameters:
     - data_dir: Path or str to directory containing XLSX files
@@ -170,11 +180,9 @@ def check_columns_consistency(data_dir, sheet_filter=lambda s: True, rename_map=
                 # Track unmapped columns
                 if rename_map is not None and c not in rename_keys:
                     unmapped[c].add(loc)
-        if rename_map is not None:
-            print("\n=== Columns NOT mapped in rename_map ===")
-        if not unmapped:
-            print("All columns are mapped!")
-        else:
+    if rename_map is not None:
+        if unmapped:
+            print(f"\n=== Columns NOT mapped in {name} ===")
             for c, locs in sorted(unmapped.items()):
                 print(f"{c}:")
                 for loc in sorted(locs):
@@ -191,10 +199,10 @@ def normalize_columns(df,column_map):
 ## Sanity checks
 check_columns_consistency(DATA_DIR,
                           sheet_filter=lambda s: "station" in s.strip().lower(),
-                          rename_map=STATION_MAP)
+                          rename_map=STATION_MAP, name="Stations")
 check_columns_consistency(DATA_DIR,
                           sheet_filter=lambda s: "master" in s.strip().lower(),
-                          rename_map=MASTER_MAP)
+                          rename_map=MASTER_MAP, name="Masters")
 # Initialize empty lists
 all_master_rows  = []
 all_station_rows = []
@@ -225,11 +233,11 @@ for xlsx in DATA_DIR.glob("**/*.xlsx"):
         
         # Fix weird time artifacting
         try:
-            df["time"] = df["time"].astype(str).str[:5]        
+            df["time_local"] = df["time_local"].astype(str).str[:5]        
             # Combine datetime and move new column after time column
-            df.insert(df.columns.get_loc("time") + 1,
+            df.insert(df.columns.get_loc("time_local") + 1,
                       "datetime",
-                      pd.to_datetime(df["date"].astype(str) + " " + df["time"].astype(str), 
+                      pd.to_datetime(df["date"].astype(str) + " " + df["time_local"].astype(str), 
                                      errors="coerce"
                                      )
                       )
