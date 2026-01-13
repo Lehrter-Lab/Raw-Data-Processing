@@ -5,9 +5,11 @@ import numpy as np
 import datetime as dt
 from collections import defaultdict
 
+# Path to data folder and name for sqlite db
 DATA_DIR = Path("data")
 engine   = create_engine("sqlite:///WQ.sqlite")
 
+# Note that map keys are all lower case since they are cast as such in the func
 MASTER_MAP = {# identifiers / cruise metadata
               "unique id": "unique_id",
               "cruise id": "cruise_id",
@@ -74,6 +76,7 @@ MASTER_MAP = {# identifiers / cruise metadata
               }
 
 STATION_MAP = {"station id":            "station_id",
+               "off shore sites":       "station_id",
                "lat":                   "latitude",
                "lon":                   "longitude",
                "station type":          "station_type",
