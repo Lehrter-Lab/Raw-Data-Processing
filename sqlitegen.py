@@ -1,7 +1,6 @@
 import pandas as pd
 from pathlib import Path
 from sqlalchemy import create_engine
-import numpy as np
 import datetime as dt
 from collections import defaultdict
 
@@ -188,21 +187,24 @@ def check_columns_consistency(data_dir, sheet_filter=lambda s: True, rename_map=
                 for loc in sorted(locs):
                     print(f"  - {loc}")
 
-# Clean columns for rename/flatten
-def normalize_columns(df,column_map):
-    df.columns = (df.columns
-                  .str.strip()
-                  .str.lower())
-    return df.rename(columns=column_map)
-
-##-----------------------------------------------------------------------------
-## Sanity checks
+# Call check
 check_columns_consistency(DATA_DIR,
                           sheet_filter=lambda s: "station" in s.strip().lower(),
                           rename_map=STATION_MAP, name="Stations")
 check_columns_consistency(DATA_DIR,
                           sheet_filter=lambda s: "master" in s.strip().lower(),
                           rename_map=MASTER_MAP, name="Masters")
+##-----------------------------------------------------------------------------
+## Load & QA data
+# Pull in xlsx sheet, rename, drop -999999s
+def loader(xlsx,sheet,column_map):
+    df = pd.read_excel(xlsx, sheet_name=sheet)
+    df.columns = (df.columns.str.strip().str.lower())
+    df.rename(columns=column_map, inplace=True)
+    df["source_file"] = xlsx.name
+    df.replace(-999999, "", inplace=True)
+    return df
+
 # Initialize empty lists
 all_master_rows  = []
 all_station_rows = []
@@ -217,37 +219,25 @@ for xlsx in DATA_DIR.glob("**/*.xlsx"):
     
     # Load station data
     for sheet in station_sheets:
-        station_df = pd.read_excel(xlsx, sheet_name=sheet)
-        station_df = normalize_columns(station_df,STATION_MAP)
-
-        station_df["source_file"] = xlsx.name
-        all_station_rows.append(station_df)
+        df = loader(xlsx,sheet,STATION_MAP)
+        all_station_rows.append(df)
 
     # Load WQ data
     for sheet in master_sheets:
-        df = pd.read_excel(xlsx, sheet_name=sheet)
-        
-        # Basic QC
-        df.replace(-999999, np.nan, inplace=True)
-        df = normalize_columns(df,MASTER_MAP)
-        
+        df = loader(xlsx,sheet,MASTER_MAP)
         # Fix weird time artifacting
         try:
             df["time_local"] = df["time_local"].astype(str).str[:5]        
             # Combine datetime and move new column after time column
-            df.insert(df.columns.get_loc("time_local") + 1,
-                      "datetime",
-                      pd.to_datetime(df["date"].astype(str) + " " + df["time_local"].astype(str), 
-                                     errors="coerce"
-                                     )
+            df.insert(df.columns.get_loc("time_local") + 1,"datetime",
+                      pd.to_datetime(df["date"].astype(str) + " " + df["time_local"].astype(str), errors="coerce")
                       )
         except:
             print(f"\nError in time column of {xlsx}::{sheet}\nImporting as is\n")
             for col in df.columns:
                 if df[col].apply(lambda x: isinstance(x, dt.time)).any():
                     df[col] = df[col].astype(str)
-        
-        df["source_file"] = xlsx.name
+          
         all_master_rows.append(df)
         
 # Concat the lists of tables
@@ -263,7 +253,8 @@ for col, dtype in DTYPES.items():
         else:
             master_df[col] = master_df[col].astype(dtype, errors="ignore")
 
-# Create the sqlite tables
+##-----------------------------------------------------------------------------
+## Create/Append the SQLite tables
 station_df.to_sql("stations",
                   engine,
                   if_exists="replace",
