@@ -75,13 +75,14 @@ MASTER_MAP = {# identifiers / cruise metadata
               "notes": "Notes"
               }
 
-STATION_MAP = {"station id":            "station_id",
-               "off shore sites":       "station_id",
-               "lat":                   "latitude",
-               "lon":                   "longitude",
-               "station type":          "station_type",
-               "node (schism)":         "node_schism",
-               "ave depth (model , m)": "ave_depth_model_m"
+STATION_MAP = {"station id":                "station_id",
+               "off shore sites":           "station_id",
+               "lat":                       "latitude",
+               "lon":                       "longitude",
+               "station type":              "station_type",
+               "node (schism)":             "node_schism",
+               "ave depth (model , m)":     "ave_depth_model_m",
+               "ave depth (model , meter)": "ave_depth_model_m"
                }
 
 DTYPES = {# identifiers
@@ -154,20 +155,30 @@ def check_columns_consistency(data_dir, sheet_filter=lambda s: True, rename_map=
     - sheet_filter: function(sheet_name) -> bool to select which sheets to check
     - rename_map: optional dict to normalize column names
     """
-    cols = defaultdict(set)
+    cols     = defaultdict(set)
+    unmapped = defaultdict(set)
+    rename_keys = set(rename_map.keys()) if rename_map is not None else set()
 
     for xlsx_path in data_dir.glob("**/*.xlsx"):
         xls = pd.ExcelFile(xlsx_path)
         for sheet in filter(sheet_filter, xls.sheet_names):
             df         = pd.read_excel(xlsx_path, sheet_name=sheet, nrows=0)
             df.columns = df.columns.str.strip().str.lower()
+            loc = f"{xlsx_path.name}::{sheet}"
             for c in df.columns:
-                cols[c].add(f"{xlsx_path.name}::{sheet}")
-
-    total_sheets = len({loc for locs in cols.values() for loc in locs})
-    for c, locs in sorted(cols.items()):
-        if len(locs) != total_sheets:
-            print(f"{c} present in {len(locs)}/{total_sheets} sheets: {sorted(locs)}")
+                cols[c].add(loc)
+                # Track unmapped columns
+                if rename_map is not None and c not in rename_keys:
+                    unmapped[c].add(loc)
+        if rename_map is not None:
+            print("\n=== Columns NOT mapped in rename_map ===")
+        if not unmapped:
+            print("All columns are mapped!")
+        else:
+            for c, locs in sorted(unmapped.items()):
+                print(f"{c}:")
+                for loc in sorted(locs):
+                    print(f"  - {loc}")
 
 # Clean columns for rename/flatten
 def normalize_columns(df,column_map):
@@ -198,8 +209,8 @@ for xlsx in DATA_DIR.glob("**/*.xlsx"):
     
     # Load station data
     for sheet in station_sheets:
-        station_df         = pd.read_excel(xlsx, sheet_name=sheet)
-        station_df         = normalize_columns(station_df,STATION_MAP)
+        station_df = pd.read_excel(xlsx, sheet_name=sheet)
+        station_df = normalize_columns(station_df,STATION_MAP)
 
         station_df["source_file"] = xlsx.name
         all_station_rows.append(station_df)
