@@ -2,6 +2,7 @@ import pandas as pd
 from pathlib import Path
 from sqlalchemy import create_engine
 import numpy as np
+import datetime as dt
 from collections import defaultdict
 
 DATA_DIR = Path("data")
@@ -10,39 +11,39 @@ engine   = create_engine("sqlite:///WQ.sqlite")
 MASTER_MAP = {# identifiers / cruise metadata
               "unique id": "unique_id",
               "cruise id": "cruise_id",
-              "year": "year",
+              "year":      "year",
               
               # time
               "date": "date",
               "time": "time",
               
               # station / location
-              "station id": "station_id",
-              "station type": "station_type",
-              "latitude": "latitude",
-              "longitude": "longitude",
-              "latitude (intended)": "latitude_intended",
+              "station id":           "station_id",
+              "station type":         "station_type",
+              "latitude":             "latitude",
+              "longitude":            "longitude",
+              "latitude (intended)":  "latitude_intended",
               "longitude (intended)": "longitude_intended",
-              "node (schism)": "node_schism",
+              "node (schism)":        "node_schism",
               
               # vertical structure
-              "layer": "layer",
+              "layer":                 "layer",
               "measurement depth (m)": "measurement_depth_m",
-              "secchi depth (m)": "secchi_depth_m",
-              "sonar depth (m)": "sonar_depth_m",
+              "secchi depth (m)":      "secchi_depth_m",
+              "sonar depth (m)":       "sonar_depth_m",
               "ave depth (model , m)": "ave_depth_model_m",
               
               # instruments
               "ctd #": "CTD_number",
-              "ctd": "CTD_number",
+              "ctd":   "CTD_number",
               
               # physical
-              "temp": "Temp_C",
-              "temperature": "Temp_C",
-              "do": "DO_mg_L",
+              "temp":             "Temp_C",
+              "temperature":      "Temp_C",
+              "do":               "DO_mg_L",
               "dissolved oxygen": "DO_mg_L",
-              "salinity": "Salinity",
-              "ph": "pH",
+              "salinity":         "Salinity",
+              "ph":               "pH",
               
               # carbon system
               "dic": "DIC",
@@ -51,69 +52,69 @@ MASTER_MAP = {# identifiers / cruise metadata
               # nutrients
               "no3 no2": "NO3_NO2",
               "no3+no2": "NO3_NO2",
-              "no3": "NO3",
-              "no2": "NO2",
-              "nh4": "NH4",
-              "po4": "PO4",
+              "no3":  "NO3",
+              "no2":  "NO2",
+              "nh4":  "NH4",
+              "po4":  "PO4",
               "d si": "DSi",
-              "dsi": "DSi",
+              "dsi":  "DSi",
               "nitrogen concentration (ug/l)": "Nitrogen_ug_L",
-              "carbon concentration (ug/l)": "Carbon_ug_L",
-              "tn": "TN",
-              "pp": "PP",
+              "carbon concentration (ug/l)":   "Carbon_ug_L",
+              "tn":  "TN",
+              "pp":  "PP",
               "tdp": "TDP",
               
               # other
-              "chla (ug/l)": "Chla_ug_l",
-              "chlorophyll a": "Chla_ug_L",
+              "chla (ug/l)":              "Chla_ug_l",
+              "chlorophyll a":            "Chla_ug_L",
               "tss concentration (mg/l)": "TSS_mg_L",
 
               # misc
               "notes": "Notes"
               }
 
-STATION_MAP = {"station ID": "station_id",
-               "lat": "latitude",
-               "lon": "longitude",
-               "station type": "station_type",
-               "node (schism)": "node_schism",
+STATION_MAP = {"station id":            "station_id",
+               "lat":                   "latitude",
+               "lon":                   "longitude",
+               "station type":          "station_type",
+               "node (schism)":         "node_schism",
                "ave depth (model , m)": "ave_depth_model_m"
                }
 
 DTYPES = {# identifiers
           "unique_id": str,
           "cruise_id": str,
-          "year": int,
+          "year":      int,
           
           # time
-          "date": str,  # keep original string
-          "time": str,
-          "datetime": "datetime64[ns]",  # pandas datetime
+          "date":     str,
+          "time":     str,
+          "datetime": "datetime64[ns]",
           
           # station / location
-          "station_id": str,
-          "station_type": str,
-          "latitude": float,
-          "longitude": float,
-          "latitude_intended": float,
+          "station_id":         str,
+          "station_type":       str,
+          "latitude":           float,
+          "longitude":          float,
+          "latitude_intended":  float,
           "longitude_intended": float,
-          "node_schism": str,
+          "node_schism":        str,
           
           # vertical structure
-          "layer": str,
+          "layer":               str,
           "measurement_depth_m": float,
-          "secchi_depth_m": float,
-          "sonar_depth_m": float,
-          "ave_depth_model_m": float,
+          "secchi_depth_m":      float,
+          "sonar_depth_m":       float,
+          "ave_depth_model_m":   float,
           
           # instruments
           "CTD_number": str,
           
           # physical
-          "Temp_C": float,
-          "DO_mg_L": float,
+          "Temp_C":   float,
+          "DO_mg_L":  float,
           "Salinity": float,
-          "pH": float,
+          "pH":       float,
           
           # carbon
           "DIC": float,
@@ -121,23 +122,23 @@ DTYPES = {# identifiers
           
           # nutrients
           "NO3_NO2": float,
-          "NO3": float,
-          "NO2": float,
-          "NH4": float,
-          "PO4": float,
-          "DSi": float,
+          "NO3":     float,
+          "NO2":     float,
+          "NH4":     float,
+          "PO4":     float,
+          "DSi":     float,
           "Nitrogen_ug_L": float,
-          "Carbon_ug_L": float,
-          "TN": float,
-          "PP": float,
+          "Carbon_ug_L":   float,
+          "TN":  float,
+          "PP":  float,
           "TDP": float,
           
           # other
           "Chla_ug_L": float,
-          "TSS_mg_L": float,
+          "TSS_mg_L":  float,
           
           # misc
-          "Notes": str,
+          "Notes":       str,
           "source_file": str
           }   
 
@@ -209,16 +210,21 @@ for xlsx in DATA_DIR.glob("**/*.xlsx"):
         df = normalize_columns(df,MASTER_MAP)
         
         # Fix weird time artifacting
-        df["time"] = df["time"].astype(str).str[:5]
+        try:
+            df["time"] = df["time"].astype(str).str[:5]        
+            # Combine datetime and move new column after time column
+            df.insert(df.columns.get_loc("time") + 1,
+                      "datetime",
+                      pd.to_datetime(df["date"].astype(str) + " " + df["time"].astype(str), 
+                                     errors="coerce"
+                                     )
+                      )
+        except:
+            print(f"\nError in time column of {xlsx}::{sheet}\nImporting as is\n")
+            for col in df.columns:
+                if df[col].apply(lambda x: isinstance(x, dt.time)).any():
+                    df[col] = df[col].astype(str)
         
-        # Combine datetime and move new column after time column
-        df.insert(df.columns.get_loc("time") + 1,
-                  "datetime",
-                  pd.to_datetime(df["date"].astype(str) + " " + df["time"].astype(str), 
-                                 errors="coerce"
-                                 )
-                  )
-            
         df["source_file"] = xlsx.name
         all_master_rows.append(df)
         
