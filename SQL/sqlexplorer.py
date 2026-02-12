@@ -74,7 +74,7 @@ def plot_by_var(variable="NPOC_ppm", agg="mean",
     
     # Plot
     fig, ax = plt.subplots(figsize=(9, 7))
-    plot    = gdf.plot(ax=ax,column=f"{variable}_mean",
+    plot    = gdf.plot(ax=ax,column=col,
                        cmap=cmap,markersize=markersize,alpha=0.8,legend=True)
     ctx.add_basemap(ax, source=ctx.providers.OpenStreetMap.Mapnik)
     ax.set_axis_off()
