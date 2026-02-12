@@ -78,6 +78,8 @@ def plot_by_var(variable="NPOC_ppm", agg="mean",
                        cmap=cmap,markersize=markersize,alpha=0.8,legend=True)
     ctx.add_basemap(ax, source=ctx.providers.OpenStreetMap.Mapnik)
     ax.set_axis_off()
+    for txt in ax.texts:
+        txt.set_fontsize(2)
     cbar = plot.get_figure().axes[-1]
     cbar.set_title(units.upper())
 
