@@ -1,8 +1,10 @@
 import sqlite3
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import geopandas as gpd
 import contextily as ctx
+import pymannkendall as mk
 
 # Paths
 DB_PATH = "WQ.sqlite"
@@ -33,7 +35,7 @@ plt.show()
 ##-----------------------------------------------------------------------------
 # Plot variable grouped by stations, **note: not actual sample location**
 def plot_by_var(variable="NPOC_ppm", agg="mean",
-                cmap="turbo", markersize=30):
+                cmap="turbo", markersize=15):
     
     # Cmap suggestions:
     # "viridis", "plasma", "inferno", "cividis", "turbo", "seismic"
@@ -88,6 +90,74 @@ def plot_by_var(variable="NPOC_ppm", agg="mean",
     plt.show()
     # outname = f"{aggname}_{variable}.png"
     # fig.savefig(outname, dpi=300, bbox_inches="tight")
+##-----------------------------------------------------------------------------
+# Station explorer
+def plot_station(station, variable="NPOC_ppm",
+                  cmap="viridis", markersize=40):
+    # Sanity check
+    if variable not in dfd.columns:
+        raise ValueError(f"{variable} not found in DataFrame.")
     
+    # Load data
+    df = dfd[dfd["station_id"] == station].copy()
+    if df.empty:
+        raise ValueError(f"No data found for station {station}")
+        
+    # Parse year
+    df["datetime"]  = pd.to_datetime(df["datetime"], errors="coerce")
+    df              = df.dropna(subset=["datetime"])
+    df["year"]      = df["datetime"].dt.year
+    df["month"] = df["datetime"].dt.month
+    df["dayofyear"] = df["datetime"].dt.dayofyear
+    df              = df.sort_values("datetime")
+    
+    # Initialize plot variables
+    years    = sorted(df["year"].unique())
+    cmap_obj = plt.get_cmap(cmap)
+    colors   = cmap_obj(np.linspace(0, 1, len(years)))
+    plt.rcParams.update({"axes.titlesize": 18,
+                         "axes.titleweight": "bold",
+                         "axes.labelsize": 16,
+                         "xtick.labelsize": 14,
+                         "ytick.labelsize": 14,
+                         "legend.fontsize": 13})
+    varname = variable.split("_")[0]
+    units   = variable.split("_", 1)[1] if "_" in variable else ""
+    # Plot
+    fig, ax = plt.subplots(figsize=(10, 6))
+    for i, year in enumerate(years):
+        yearly_data = df[df["year"] == year]
+        ax.scatter(yearly_data["dayofyear"], yearly_data[variable],
+                   label=str(year),
+                   color=colors[i],
+                   s=markersize)
+    ax.set_xlim(1, 366)
+    
+    # Put approximate month labels **note: leap year messes things slightly**
+    month_starts = [1, 32, 60, 91, 121, 152,
+                    182, 213, 244, 274, 305, 335]
+    
+    month_labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    ax.set_xticks(month_starts)
+    ax.set_xticklabels(month_labels)
+    
+    ax.set_title(f"{varname} ({units}) at {station}")
+    ax.legend(loc="best")
+    
+    # Seasonal Mann-Kendall taking mean of each months data per year
+    month_groups = df.groupby(['year', 'month'])[variable].mean()
+    month_array = month_groups.unstack('month')
+    # Mann Kendall package expects columns of seasons and rows as cycles
+    seasonalmk   = mk.seasonal_test(month_array.values, period=12)
+    mk_text      = f"Trend: {seasonalmk.trend}\nSlope: {seasonalmk.slope:.3f}\np-value: {seasonalmk.p:.3f}"
+    ax.text(0.02, 0.95, mk_text, transform=ax.transAxes, 
+            fontsize=12, verticalalignment='top', 
+            bbox=dict(facecolor='white', alpha=0.7, edgecolor='gray'))
+    plt.tight_layout()
+    plt.show()
+    return month_array
+##-----------------------------------------------------------------------------
 # Call
-plot_by_var(variable="DIC_ppm",agg="mean")
+plot_by_var(variable="NPOC_ppm",agg="median")
+ma=plot_station(station="TR-UP",variable="NPOC_ppm")
