@@ -1,8 +1,10 @@
 import pandas as pd
 from pathlib import Path
 from sqlalchemy import create_engine
-import datetime as dt
+from sqlalchemy import inspect, text
 from collections import defaultdict
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
 # Path to data folder and name for sqlite db
 DATA_DIR = Path("data")
@@ -45,8 +47,8 @@ MASTER_MAP = {# identifiers / cruise metadata
               "temperature (c)":         "Temp_C",
               "do (mg/l)":               "DO_mg_L",
               "dissolved oxygen (mg/l)": "DO_mg_L",
-              "do (%)":                  "DO_%",
-              "conductivity (spc)":      "Conductivity_SPC_µS_cm",
+              "do (%)":                  "DO_percent",
+              "conductivity (spc)":      "Conductivity_SPC_uS_cm",
               "salinity (psu)":          "Salinity_PSU",
               "ph":                      "pH",
               
@@ -56,23 +58,23 @@ MASTER_MAP = {# identifiers / cruise metadata
               "npoc (ppm)": "NPOC_ppm",
               
               # nutrients
-              "no3 no2 (µm)":   "NO3_NO2_µM",
-              "no3+no2 (µm)":   "NO3_NO2_µM",
-              "no3 (µm)":       "NO3_µM",
-              "no2 (µm)":       "NO2_µM",
-              "nh4 (µm)":       "NH4_µM",
-              "po4 (µm)":       "PO4_µM",
-              "d si (µm)":      "DSi_µM",
-              "dsi (µm)":       "DSi_µM",
-              "nitrogen concentration (ug/l)": "Nitrogen_µg_L",
-              "carbon concentration (ug/l)":   "Carbon_µg_L",
+              "no3 no2 (µm)":   "NO3_NO2_uM",
+              "no3+no2 (µm)":   "NO3_NO2_uM",
+              "no3 (µm)":       "NO3_uM",
+              "no2 (µm)":       "NO2_uM",
+              "nh4 (µm)":       "NH4_uM",
+              "po4 (µm)":       "PO4_uM",
+              "d si (µm)":      "DSi_uM",
+              "dsi (µm)":       "DSi_uM",
+              "nitrogen concentration (ug/l)": "Nitrogen_ug_L",
+              "carbon concentration (ug/l)":   "Carbon_ug_L",
               "tn (ppm)":       "TN_ppm",
-              "pp (µm)":        "PP_µM",
-              "tdp (µm)":       "TDP_µM",
+              "pp (µm)":        "PP_uM",
+              "tdp (µm)":       "TDP_uM",
               
               # other
-              "chla (ug/l)":              "Chla_µg_l",
-              "chlorophyll a":            "Chla_µg_L",
+              "chla (ug/l)":              "Chla_ug_l",
+              "chlorophyll a":            "Chla_ug_L",
               "tss concentration (mg/l)": "TSS_mg_L",
 
               # misc
@@ -97,10 +99,10 @@ DTYPES = {# identifiers
           "year":      int,
           
           # time
-          "date":           str,
-          "time_local":     str,
-          "time_utc":       str,
-          "datetime": "datetime64[ns]",
+          "date":       str,
+          "time_local": str,
+          "time_utc":   str,
+          "datetime":   str,
           
           # station / location
           "station_id":         str,
@@ -162,7 +164,7 @@ def check_columns_consistency(data_dir, sheet_filter=lambda s: True, rename_map=
     Parameters:
     - data_dir: Path or str to directory containing XLSX files
     - sheet_filter: function(sheet_name) -> bool to select which sheets to check
-    - rename_map: optional dict to normalize column names
+    - rename_map: dict to normalize column names
     """
     cols     = defaultdict(set)
     unmapped = defaultdict(set)
@@ -194,15 +196,20 @@ check_columns_consistency(DATA_DIR,
 check_columns_consistency(DATA_DIR,
                           sheet_filter=lambda s: "master" in s.strip().lower(),
                           rename_map=MASTER_MAP, name="Masters")
+
 ##-----------------------------------------------------------------------------
 ## Load & QA data
 # Pull in xlsx sheet, rename, drop -999999s
 def loader(xlsx,sheet,column_map):
-    df = pd.read_excel(xlsx, sheet_name=sheet)
-    df.columns = (df.columns.str.strip().str.lower())
-    df.rename(columns=column_map, inplace=True)
+    df                = pd.read_excel(xlsx, sheet_name=sheet)
+    df.columns        = (df.columns.str.strip().str.lower())
+    df                = df.rename(columns=column_map)
+    df.columns        = df.columns.str.replace(r"[^a-zA-Z0-9_]", "_", regex=True)\
+                       .str.replace(r"_+", "_", regex=True)\
+                       .str.strip("_")
     df["source_file"] = xlsx.name
-    df.replace(-999999, "", inplace=True)
+    df = df.replace(-999999, pd.NA)
+    df = df.where(pd.notnull(df), None)
     return df
 
 # Initialize empty lists
@@ -226,20 +233,18 @@ for xlsx in DATA_DIR.glob("**/*.xlsx"):
     for sheet in master_sheets:
         df = loader(xlsx,sheet,MASTER_MAP)
         # Fix weird time artifacting
-        try:
-            df["time_local"] = df["time_local"].astype(str).str[:5]        
-            # Combine datetime and move new column after time column
-            df.insert(df.columns.get_loc("time_local") + 1,"datetime",
-                      pd.to_datetime(df["date"].astype(str) + " " + df["time_local"].astype(str), errors="coerce")
-                      )
-        except:
-            print(f"\nError in time column of {xlsx}::{sheet}\nImporting as is\n")
-            for col in df.columns:
-                if df[col].apply(lambda x: isinstance(x, dt.time)).any():
-                    df[col] = df[col].astype(str)
+        df["time_local"] = df["time_local"].astype(str).str[:5]        
+        # Combine datetime and move new column after time column
+        df.insert(df.columns.get_loc("time_local") + 1,
+                  "datetime",
+                  pd.to_datetime(df["date"].astype(str).str.strip() + " " + df["time_local"].astype(str).str.strip(),
+                                 errors="coerce"
+                                 ).dt.strftime("%Y-%m-%d %H:%M:%S") 
+                  )
+        df["datetime"] = df["datetime"].fillna("")
           
         all_master_rows.append(df)
-        
+      
 # Concat the lists of tables
 master_df  = pd.concat(all_master_rows, ignore_index=True)
 station_df = (pd.concat(all_station_rows, ignore_index=True)
@@ -248,18 +253,119 @@ station_df = (pd.concat(all_station_rows, ignore_index=True)
 # Enforce dtypes
 for col, dtype in DTYPES.items():
     if col in master_df.columns:
-        if dtype == "datetime64[ns]":
-            master_df[col] = pd.to_datetime(master_df[col], errors="coerce")
+        if dtype in (int, float):
+            master_df[col] = pd.to_numeric(master_df[col], errors="coerce")
+        elif dtype is str:
+            master_df[col] = master_df[col].astype("string")
         else:
-            master_df[col] = master_df[col].astype(dtype, errors="ignore")
+            master_df[col] = master_df[col].astype(dtype)
 
 ##-----------------------------------------------------------------------------
+## Upserting data
+def normalize(df):
+    df = df.copy()
+    if "datetime" in df.columns:
+        df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce").dt.strftime("%Y-%m-%d %H:%M:%S")
+    if "station_id" in df.columns:
+        df["station_id"] = df["station_id"].astype(str).str.strip()
+    df = df.where(pd.notnull(df), None)
+    return df
+
 ## Create/Append the SQLite tables
-station_df.to_sql("stations",
-                  engine,
-                  if_exists="replace",
-                  index=False)
-master_df.to_sql("data",
-                 engine,
-                 if_exists="replace",
-                 index=False)
+inspector = inspect(engine)
+
+# Read station table and append only new station_id rows
+if inspector.has_table("stations"):
+    # Read existing station IDs
+    existing_stations = pd.read_sql("SELECT station_id FROM stations",
+                                    engine)["station_id"]
+
+    new_stations = station_df[~station_df["station_id"].isin(existing_stations)]
+
+    if not new_stations.empty:
+        new_stations.to_sql("stations",
+                             engine,
+                             if_exists="append",
+                             index=False)
+    else:
+        print("No new station rows to append.")
+else:
+    station_df.to_sql("stations",
+                      engine,
+                      if_exists="replace",
+                      index=False)
+    
+# Read master table and upsert new data
+with engine.begin() as conn:
+    if not inspector.has_table("data"):
+            master_df.to_sql("data",
+                             conn,
+                             if_exists="replace",
+                             index=False)
+
+    else:
+        # Load existing keys
+        existing = pd.read_sql("SELECT * FROM data", conn)
+        # Normalize inputs/remove artifacting
+        existing  = normalize(existing)
+        master_df = normalize(master_df)
+        
+        # Do a join and use suffixes to figure out upsert locations
+        merged = master_df.merge(existing,
+                                 on=["station_id", "datetime"],
+                                 how="left",
+                                 suffixes=("_new", "_old"),
+                                 indicator=True)
+        
+        # Sort rows into useful categories
+        both_rows    = merged[merged["_merge"] == "both"]
+        key_cols     = ["station_id", "datetime"]
+        compare_cols = [c for c in master_df.columns if c not in key_cols]
+        
+        # Check what rows do not exist yet
+        to_insert = merged.loc[merged["_merge"] == "left_only", 
+                               key_cols + [c+"_new" for c in compare_cols]].copy()
+        to_insert.columns = key_cols + compare_cols
+        
+        # Checker func
+        def row_differs(row):
+            for c in compare_cols:
+                new_val = row[f"{c}_new"]
+                old_val = row[f"{c}_old"]
+                if pd.isna(new_val) and pd.isna(old_val):
+                    continue
+                if new_val != old_val:
+                    return True
+            return False
+        
+        # Call func and mask rows that need updating
+        diff_mask = both_rows.apply(row_differs, axis=1)
+        to_update = both_rows.loc[diff_mask, 
+                                  key_cols + [f"{c}_new" for c in compare_cols]].copy()
+        
+        # Update
+        if not to_update.empty:
+            cols = compare_cols
+            set_clause = ", ".join([f"{c} = :{c}" for c in cols])
+    
+            update_sql = text(f"""
+                            UPDATE data
+                            SET {set_clause}
+                            WHERE station_id = :station_id
+                              AND datetime   = :datetime
+                              """)
+    
+            conn.execute(update_sql,to_update.to_dict(orient="records"))
+            print(f"Updated {len(to_update)} rows in data table.")
+            
+        # Insert
+        if not to_insert.empty:
+            to_insert.to_sql("data",
+                             conn,
+                             if_exists="append",
+                             index=False)
+            print(f"Inserted {len(to_insert)} new rows into data table.")
+            
+        # Clarify what's going on
+        if to_insert.empty and to_update.empty:
+            print("No new or updated rows to upsert in data table.")
