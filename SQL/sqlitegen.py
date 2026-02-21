@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy import inspect, text
@@ -8,7 +9,7 @@ warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
 # Path to data folder and name for sqlite db
 DATA_DIR = Path("data")
-engine   = create_engine("sqlite:///WQ.sqlite")
+engine   = create_engine("sqlite:///WQ.sqlite", isolation_level="SERIALIZABLE")
 
 # Note that map keys are all lower case since they are cast as such in the func
 MASTER_MAP = {# identifiers / cruise metadata
@@ -136,17 +137,17 @@ DTYPES = {# identifiers
           "NPOC_ppm": float,
           
           # nutrients
-          "NO3_NO2_µM": float,
-          "NO3_µM":     float,
-          "NO2_µM":     float,
-          "NH4_µM":     float,
-          "PO4_µM":     float,
-          "DSi_µM":     float,
+          "NO3_NO2_uM": float,
+          "NO3_uM":     float,
+          "NO2_uM":     float,
+          "NH4_uM":     float,
+          "PO4_uM":     float,
+          "DSi_uM":     float,
           "Nitrogen_ug_L": float,
           "Carbon_ug_L":   float,
           "TN_ppm":  float,
-          "PP_µM":  float,
-          "TDP_µM": float,
+          "PP_uM":  float,
+          "TDP_uM": float,
           
           # other
           "Chla_ug_L": float,
@@ -208,8 +209,23 @@ def loader(xlsx,sheet,column_map):
                        .str.replace(r"_+", "_", regex=True)\
                        .str.strip("_")
     df["source_file"] = xlsx.name
-    df = df.replace(-999999, pd.NA)
-    df = df.where(pd.notnull(df), None)
+    for col in df.columns:
+        if col == "layer":
+            df[col] = df[col].fillna("S")
+        else:
+            df[col] = df[col].replace([np.nan, pd.NA, None, ""], -999999)
+    return df
+
+# Make dtypes consistent, needs to be periodically called
+def enforce_dtypes(df, dtypes_map):
+    for col, dtype in dtypes_map.items():
+        if col in df.columns:
+            if dtype in (int, float):
+                df[col] = pd.to_numeric(df[col], errors="coerce").fillna(-999999)
+            elif dtype is str:
+                df[col] = df[col].astype("string")
+            else:
+                df[col] = df[col].astype(dtype)
     return df
 
 # Initialize empty lists
@@ -251,121 +267,96 @@ station_df = (pd.concat(all_station_rows, ignore_index=True)
               .drop_duplicates(subset=["station_id"]))
 
 # Enforce dtypes
-for col, dtype in DTYPES.items():
-    if col in master_df.columns:
-        if dtype in (int, float):
-            master_df[col] = pd.to_numeric(master_df[col], errors="coerce")
-        elif dtype is str:
-            master_df[col] = master_df[col].astype("string")
-        else:
-            master_df[col] = master_df[col].astype(dtype)
-
+master_df = enforce_dtypes(master_df, DTYPES)
 ##-----------------------------------------------------------------------------
-## Upserting data
+## Key functions
 def normalize(df):
     df = df.copy()
     if "datetime" in df.columns:
         df["datetime"] = pd.to_datetime(df["datetime"], errors="coerce").dt.strftime("%Y-%m-%d %H:%M:%S")
     if "station_id" in df.columns:
         df["station_id"] = df["station_id"].astype(str).str.strip()
-    df = df.where(pd.notnull(df), None)
+    df = df.fillna(-999999)
     return df
 
-## Create/Append the SQLite tables
-inspector = inspect(engine)
-
-# Read station table and append only new station_id rows
-if inspector.has_table("stations"):
-    # Read existing station IDs
-    existing_stations = pd.read_sql("SELECT station_id FROM stations",
-                                    engine)["station_id"]
-
-    new_stations = station_df[~station_df["station_id"].isin(existing_stations)]
-
-    if not new_stations.empty:
-        new_stations.to_sql("stations",
-                             engine,
-                             if_exists="append",
-                             index=False)
-    else:
-        print("No new station rows to append.")
-else:
-    station_df.to_sql("stations",
-                      engine,
-                      if_exists="replace",
-                      index=False)
+def upsert_dataframe(df, conn, table_name, key_cols, interactive_dupes=True):
+    df = normalize(df)
+    # Handle duplicates within the input DataFrame
+    if interactive_dupes:
+        dup_check = df[df.duplicated(subset=key_cols, keep=False)]
+        if not dup_check.empty:
+            print(f"\nWARNING: Found {len(dup_check)} duplicate rows based on {', '.join(key_cols)}!")
+            print(dup_check.sort_values(key_cols))
+            
+            while True:
+                choice = input("\nKeep only the first of each duplicate and continue? (y/n): ").strip().lower()
+                if choice in ["y", "n"]:
+                    break
+                print("Please enter 'y' or 'n'.")
+            
+            if choice == "y":
+                df = df.drop_duplicates(subset=key_cols, keep="first")
+                print(f"Duplicates removed. Proceeding with {len(df)} rows.")
+            else:
+                raise ValueError("Aborted by user due to duplicate rows. Resolve dupes and rerun.")
     
-# Read master table and upsert new data
+    # Create table if it doesn't exist
+    inspector = inspect(conn)
+    if not inspector.has_table(table_name):
+        df.to_sql(table_name, conn, if_exists="replace", index=False)
+        # Create unique index on key columns
+        idx_cols = ", ".join(key_cols)
+        conn.execute(text(f"""CREATE UNIQUE INDEX IF NOT EXISTS
+                              ux_{table_name}_{'_'.join(key_cols)}
+                              ON {table_name} ({idx_cols})"""))
+        print(f"Inserted {len(df)} rows into new {table_name} table.")
+        return
+    
+    # Compare with existing DB to find new or changed rows
+    existing_df  = pd.read_sql(f"SELECT * FROM {table_name}", conn)
+    existing_df  = enforce_dtypes(existing_df, DTYPES)
+    
+    # Align cols before merge
+    common_cols  = [c for c in df.columns if c in existing_df.columns]
+    df           = df[common_cols]
+    existing_df  = existing_df[common_cols]
+    
+    # Merge to detect new or changed rows
+    merged       = df.merge(existing_df, on=key_cols, how="left", 
+                            suffixes=('', '_db'), indicator=True)
+    non_key_cols = [c for c in df.columns if c not in key_cols]
+    if non_key_cols:
+        diffs = merged[non_key_cols].ne(merged[[f"{c}_db" for c in non_key_cols]].values).any(axis=1)
+    else:
+        diffs = pd.Series(False, index=merged.index)
+    
+    changed_mask = (merged["_merge"] == "left_only") | diffs
+
+    # Get new_or_changed rows from merged, not df
+    new_or_changed = merged.loc[changed_mask, df.columns]
+    
+    if new_or_changed.empty:
+        print(f"No new or changed rows detected in {table_name}. Database is up-to-date.")
+        return
+    
+    # Upsert only new or changed rows
+    insert_cols   = ", ".join(new_or_changed.columns)
+    placeholders  = ", ".join([f":{c}" for c in new_or_changed.columns])
+    update_clause = ", ".join([f"{c} = excluded.{c}" for c in non_key_cols]) if non_key_cols else f"{key_cols[0]} = excluded.{key_cols[0]}"
+    
+    upsert_sql = text(f"""INSERT INTO {table_name} ({insert_cols})
+                          VALUES ({placeholders})
+                          ON CONFLICT({', '.join(key_cols)})
+                          DO UPDATE SET {update_clause}""")
+    
+    conn.execute(upsert_sql, new_or_changed.to_dict(orient="records"))
+    print(f"\nUpserted {len(new_or_changed)} new or changed rows into {table_name} table.")
+
+##-----------------------------------------------------------------------------
+# Call funcs for upsert
 with engine.begin() as conn:
-    if not inspector.has_table("data"):
-            master_df.to_sql("data",
-                             conn,
-                             if_exists="replace",
-                             index=False)
-
-    else:
-        # Load existing keys
-        existing = pd.read_sql("SELECT * FROM data", conn)
-        # Normalize inputs/remove artifacting
-        existing  = normalize(existing)
-        master_df = normalize(master_df)
-        
-        # Do a join and use suffixes to figure out upsert locations
-        merged = master_df.merge(existing,
-                                 on=["station_id", "datetime"],
-                                 how="left",
-                                 suffixes=("_new", "_old"),
-                                 indicator=True)
-        
-        # Sort rows into useful categories
-        both_rows    = merged[merged["_merge"] == "both"]
-        key_cols     = ["station_id", "datetime"]
-        compare_cols = [c for c in master_df.columns if c not in key_cols]
-        
-        # Check what rows do not exist yet
-        to_insert = merged.loc[merged["_merge"] == "left_only", 
-                               key_cols + [c+"_new" for c in compare_cols]].copy()
-        to_insert.columns = key_cols + compare_cols
-        
-        # Checker func
-        def row_differs(row):
-            for c in compare_cols:
-                new_val = row[f"{c}_new"]
-                old_val = row[f"{c}_old"]
-                if pd.isna(new_val) and pd.isna(old_val):
-                    continue
-                if new_val != old_val:
-                    return True
-            return False
-        
-        # Call func and mask rows that need updating
-        diff_mask = both_rows.apply(row_differs, axis=1)
-        to_update = both_rows.loc[diff_mask, 
-                                  key_cols + [f"{c}_new" for c in compare_cols]].copy()
-        
-        # Update
-        if not to_update.empty:
-            cols = compare_cols
-            set_clause = ", ".join([f"{c} = :{c}" for c in cols])
+    # Upsert stations
+    upsert_dataframe(station_df, conn, table_name="stations", key_cols=["station_id"])
     
-            update_sql = text(f"""
-                            UPDATE data
-                            SET {set_clause}
-                            WHERE station_id = :station_id
-                              AND datetime   = :datetime
-                              """)
-    
-            conn.execute(update_sql,to_update.to_dict(orient="records"))
-            print(f"Updated {len(to_update)} rows in data table.")
-            
-        # Insert
-        if not to_insert.empty:
-            to_insert.to_sql("data",
-                             conn,
-                             if_exists="append",
-                             index=False)
-            print(f"Inserted {len(to_insert)} new rows into data table.")
-            
-        # Clarify what's going on
-        if to_insert.empty and to_update.empty:
-            print("No new or updated rows to upsert in data table.")
+    # Upsert master data
+    upsert_dataframe(master_df, conn, table_name="data", key_cols=["station_id", "datetime", "layer"])
