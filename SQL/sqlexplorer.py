@@ -13,8 +13,8 @@ data    = "data"
 
 # Load data
 con = sqlite3.connect(DB_PATH)
-dfs = pd.read_sql(f"SELECT * FROM {Station}", con)
-dfd = pd.read_sql(f"SELECT * FROM {data}", con)
+dfs = pd.read_sql(f"SELECT * FROM {Station}", con).replace(-999999,np.nan)
+dfd = pd.read_sql(f"SELECT * FROM {data}", con).replace(-999999,np.nan)
 con.close()
 
 ##-----------------------------------------------------------------------------
