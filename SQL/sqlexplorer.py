@@ -203,19 +203,21 @@ def plot_station(station=None, variable="NPOC_ppm",
     ax.set_xlim(1, 366)
     
     # Put approximate month labels **note: leap year messes things slightly**
-    month_starts = [1, 32, 60, 91, 121, 152,
-                    182, 213, 244, 274, 305, 335]
-    
+    month_starts = [1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335]
     month_labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     ax.set_xticks(month_starts)
     ax.set_xticklabels(month_labels)
     
+    # Title
     if station:
         ax.set_title(f"{varname} ({units}) at {station}")
     else:
         ax.set_title(f"{varname} ({units})")
-    ax.legend(loc="best")
+        
+    # Legend
+    ax.legend(loc="upper right", bbox_to_anchor=(1.005, 1.01), ncols=2, framealpha=0.8,
+              labelspacing=0.1, columnspacing=0.1, handletextpad=0.01)
     
     # Seasonal Mann-Kendall taking mean of each months data per year
     month_groups = df.groupby(['year', 'month'])[variable].mean()
@@ -225,7 +227,7 @@ def plot_station(station=None, variable="NPOC_ppm",
     seasonalmk   = mk.seasonal_test(month_array.values, period=12)
     slope        = seasonalmk.slope
     mk_text      = f"Trend: {seasonalmk.trend}\nSlope: {slope:.3f}\np-value: {seasonalmk.p:.3f}"
-    ax.text(0.02, 0.95, mk_text, transform=ax.transAxes, 
+    ax.text(0.010, 0.982, mk_text, transform=ax.transAxes, 
             fontsize=12, verticalalignment='top', 
             bbox=dict(facecolor='white', alpha=0.7, edgecolor='gray'))
     
