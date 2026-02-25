@@ -192,7 +192,7 @@ def plot_station(station=None, variable="NPOC_ppm",
     varname = variable.split("_")[0]
     units   = variable.split("_", 1)[1] if "_" in variable else ""
     
-    # Plot
+    # Plot scatter of non-aggregate data
     fig, ax = plt.subplots(figsize=(10, 6))
     for i, year in enumerate(years):
         yearly_data = df[df["year"] == year]
@@ -215,21 +215,23 @@ def plot_station(station=None, variable="NPOC_ppm",
     else:
         ax.set_title(f"{varname} ({units})")
         
-    # Legend
+    # Legend for scatter
     ax.legend(loc="upper right", bbox_to_anchor=(1.005, 1.01), ncols=2, framealpha=0.8,
               labelspacing=0.1, columnspacing=0.1, handletextpad=0.01)
     
     # Seasonal Mann-Kendall taking mean of each months data per year
     month_groups = df.groupby(['year', 'month'])[variable].mean()
     month_array = month_groups.unstack('month')
-    
-    # Mann Kendall package expects columns of seasons and rows as cycles
-    seasonalmk   = mk.seasonal_test(month_array.values, period=12)
-    slope        = seasonalmk.slope
-    mk_text      = f"Trend: {seasonalmk.trend}\nSlope: {slope:.3f}\np-value: {seasonalmk.p:.3f}"
-    ax.text(0.010, 0.982, mk_text, transform=ax.transAxes, 
-            fontsize=12, verticalalignment='top', 
-            bbox=dict(facecolor='white', alpha=0.7, edgecolor='gray'))
+    try:
+        # Mann Kendall package expects columns of seasons and rows as cycles
+        seasonalmk   = mk.seasonal_test(month_array.values, period=12)
+        slope        = seasonalmk.slope
+        mk_text      = f"Trend: {seasonalmk.trend}\nSlope: {slope:.3f}\np-value: {seasonalmk.p:.3f}"
+        ax.text(0.010, 0.982, mk_text, transform=ax.transAxes, 
+                fontsize=12, verticalalignment='top', 
+                bbox=dict(facecolor='white', alpha=0.7, edgecolor='gray'))
+    except:
+        print("Couldn't process Mann-Kendall, check raw data and try again.")
     
     plt.tight_layout()
     plt.show()
@@ -237,4 +239,4 @@ def plot_station(station=None, variable="NPOC_ppm",
 ##-----------------------------------------------------------------------------
 # Call
 plot_by_var(variable="DIC_ppm",agg="median")
-ma=plot_station(variable="DIC_ppm")
+ma=plot_station(station="FSRX7",variable="DIC_ppm")
