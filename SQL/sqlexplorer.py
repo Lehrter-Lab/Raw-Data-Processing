@@ -28,19 +28,23 @@ gdf = gpd.GeoDataFrame(dfs, geometry=gpd.points_from_xy(dfs.longitude,dfs.latitu
                        crs="EPSG:4326")
 gdf = gdf.to_crs(epsg=3857)             # Reproject for basemap
 fig, ax = plt.subplots(figsize=(9, 7))
-gdf.plot(ax=ax,markersize=15,alpha=0.8)
+gdf.plot(ax=ax,markersize=12,alpha=0.8)
 ctx.add_basemap(ax,source=ctx.providers.OpenStreetMap.Mapnik)
-ax.set_axis_off()
+# Map frame
+ax.set_xticks([])
+ax.set_yticks([])
+# Title
 ax.set_title("Station Locations")
+# Make citation small
 for txt in ax.texts:
-    txt.set_fontsize(2)
+    txt.set_fontsize(1)
 plt.show()
 # fig.savefig("stations.png",dpi=300,bbox_inches="tight")
 
 ##-----------------------------------------------------------------------------
 # Plot variable grouped by stations, **note: not actual sample location**
 def plot_by_var(variable="NPOC_ppm", agg="mean",
-                cmap="turbo", markersize=15):
+                cmap="turbo", markersize=12):
     
     # Cmap suggestions:
     # "viridis", "plasma", "inferno", "cividis", "turbo", "seismic"
@@ -124,7 +128,7 @@ def plot_by_var(variable="NPOC_ppm", agg="mean",
     # Title settings
     title    = (f"{aggname} {varname}")
     subtitle = f"(Min: {vmin_str}, Max: {vmax_str})"
-    ax.set_title(title, fontsize=14, pad=14)
+    ax.set_title(title, fontsize=14, pad=16)
     ax.text(0.5, 1.00, subtitle,
             transform=ax.transAxes,
             ha="center",
@@ -167,7 +171,7 @@ def plot_station(station, variable="NPOC_ppm",
     df["datetime"]  = pd.to_datetime(df["datetime"], errors="coerce")
     df              = df.dropna(subset=["datetime"])
     df["year"]      = df["datetime"].dt.year
-    df["month"] = df["datetime"].dt.month
+    df["month"]     = df["datetime"].dt.month
     df["dayofyear"] = df["datetime"].dt.dayofyear
     df              = df.sort_values("datetime")
     
@@ -183,6 +187,7 @@ def plot_station(station, variable="NPOC_ppm",
                          "legend.fontsize": 13})
     varname = variable.split("_")[0]
     units   = variable.split("_", 1)[1] if "_" in variable else ""
+    
     # Plot
     fig, ax = plt.subplots(figsize=(10, 6))
     for i, year in enumerate(years):
@@ -208,12 +213,14 @@ def plot_station(station, variable="NPOC_ppm",
     # Seasonal Mann-Kendall taking mean of each months data per year
     month_groups = df.groupby(['year', 'month'])[variable].mean()
     month_array = month_groups.unstack('month')
+    
     # Mann Kendall package expects columns of seasons and rows as cycles
     seasonalmk   = mk.seasonal_test(month_array.values, period=12)
     mk_text      = f"Trend: {seasonalmk.trend}\nSlope: {seasonalmk.slope:.3f}\np-value: {seasonalmk.p:.3f}"
     ax.text(0.02, 0.95, mk_text, transform=ax.transAxes, 
             fontsize=12, verticalalignment='top', 
             bbox=dict(facecolor='white', alpha=0.7, edgecolor='gray'))
+    
     plt.tight_layout()
     plt.show()
     return month_array
