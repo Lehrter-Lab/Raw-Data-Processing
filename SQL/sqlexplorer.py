@@ -156,16 +156,20 @@ def plot_by_var(variable="NPOC_ppm", agg="mean",
     # fig.savefig(outname, dpi=300, bbox_inches="tight")
 ##-----------------------------------------------------------------------------
 # Station explorer
-def plot_station(station, variable="NPOC_ppm",
+def plot_station(station=None, variable="NPOC_ppm",
                   cmap="viridis", markersize=40):
     # Sanity check
     if variable not in dfd.columns:
         raise ValueError(f"{variable} not found in DataFrame.")
     
     # Load data
-    df = dfd[dfd["station_id"] == station].copy()
-    if df.empty:
-        raise ValueError(f"No data found for station {station}")
+    if station:
+        df = dfd[dfd["station_id"] == station].copy()
+        if df.empty:
+            raise ValueError(f"No data found for station {station}")
+    else:
+        df = dfd.copy()
+    
         
     # Parse year
     df["datetime"]  = pd.to_datetime(df["datetime"], errors="coerce")
@@ -207,7 +211,10 @@ def plot_station(station, variable="NPOC_ppm",
     ax.set_xticks(month_starts)
     ax.set_xticklabels(month_labels)
     
-    ax.set_title(f"{varname} ({units}) at {station}")
+    if station:
+        ax.set_title(f"{varname} ({units}) at {station}")
+    else:
+        ax.set_title(f"{varname} ({units})")
     ax.legend(loc="best")
     
     # Seasonal Mann-Kendall taking mean of each months data per year
@@ -216,7 +223,8 @@ def plot_station(station, variable="NPOC_ppm",
     
     # Mann Kendall package expects columns of seasons and rows as cycles
     seasonalmk   = mk.seasonal_test(month_array.values, period=12)
-    mk_text      = f"Trend: {seasonalmk.trend}\nSlope: {seasonalmk.slope:.3f}\np-value: {seasonalmk.p:.3f}"
+    slope        = seasonalmk.slope
+    mk_text      = f"Trend: {seasonalmk.trend}\nSlope: {slope:.3f}\np-value: {seasonalmk.p:.3f}"
     ax.text(0.02, 0.95, mk_text, transform=ax.transAxes, 
             fontsize=12, verticalalignment='top', 
             bbox=dict(facecolor='white', alpha=0.7, edgecolor='gray'))
@@ -227,4 +235,4 @@ def plot_station(station, variable="NPOC_ppm",
 ##-----------------------------------------------------------------------------
 # Call
 plot_by_var(variable="DIC_ppm",agg="median")
-ma=plot_station(station="TR-UP",variable="DIC_ppm")
+ma=plot_station(variable="DIC_ppm")
