@@ -5,6 +5,11 @@ import matplotlib.pyplot as plt
 import geopandas as gpd
 import contextily as ctx
 import pymannkendall as mk
+import matplotlib.patheffects as pe
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+# rcParams
+plt.rcParams["figure.dpi"] = 300
 
 # Paths
 DB_PATH = "WQ.sqlite"
@@ -64,8 +69,14 @@ def plot_by_var(variable="NPOC_ppm", agg="mean",
                  .agg(agg_funcs[agg])
                  .rename(columns={variable: col}))
     df = dfs.merge(agg_vals, on="station_id", how="left")
-    vmin = agg_vals[col].min()
-    vmax = agg_vals[col].max()
+    
+    # Do some stats on aggregated values
+    median_val          = agg_vals[col].median()
+    agg_vals["abs_dev"] = (agg_vals[col] - median_val).abs()
+    extreme_ids         = (agg_vals.sort_values("abs_dev", ascending=False)
+                           .head(5)["station_id"])
+    vmin     = agg_vals[col].min()
+    vmax     = agg_vals[col].max()
     vmin_str = f"{vmin:.3f}"
     vmax_str = f"{vmax:.3f}"
     
@@ -74,18 +85,67 @@ def plot_by_var(variable="NPOC_ppm", agg="mean",
                            crs="EPSG:4326")
     gdf = gdf.to_crs(epsg=3857) # Reproject for basemap
     
-    # Plot
+    # Get bounds
+    xmin, ymin, xmax, ymax = gdf.total_bounds
+    xrange = xmax - xmin
+    yrange = ymax - ymin
+    
+    pad_frac = 0.03
+    xmin -= xrange * pad_frac
+    xmax += xrange * pad_frac
+    ymin -= yrange * pad_frac
+    ymax += yrange * pad_frac
+    
+    # Start Plot
     fig, ax = plt.subplots(figsize=(9, 7))
     plot    = gdf.plot(ax=ax,column=col,
-                       cmap=cmap,markersize=markersize,alpha=0.8,legend=True)
+                       cmap=cmap,markersize=markersize,alpha=0.8,legend=False)
     ctx.add_basemap(ax, source=ctx.providers.OpenStreetMap.Mapnik)
-    ax.set_axis_off()
+    
+    # Map frame
+    ax.set_xticks([])
+    ax.set_yticks([])
+    
+    # Make citation small
     for txt in ax.texts:
-        txt.set_fontsize(2)
-    cbar = plot.get_figure().axes[-1]
-    cbar.set_title(units.upper())
-
-    ax.set_title(f"{aggname} {varname} (min: {vmin_str}, max: {vmax_str})")
+        txt.set_fontsize(1)
+        
+    # Colorbar setting
+    divider = make_axes_locatable(ax)
+    cax     = divider.append_axes("right", size="8%", pad=0.05)
+    cbar    = fig.colorbar(plot.collections[0], cax=cax)
+    cbar.ax.tick_params(labelsize=9)
+    cbar.ax.set_title(units.upper(), fontsize=10)
+    
+    # Set map bounds based off universal range not non-NaN range
+    ax.set_xlim(xmin, xmax)
+    ax.set_ylim(ymin, ymax)
+    
+    # Title settings
+    title    = (f"{aggname} {varname}")
+    subtitle = f"(Min: {vmin_str}, Max: {vmax_str})"
+    ax.set_title(title, fontsize=14, pad=14)
+    ax.text(0.5, 1.00, subtitle,
+            transform=ax.transAxes,
+            ha="center",
+            va="bottom",
+            fontsize=12)
+    
+    # Add labels for top 5 highest values
+    for _, row in gdf[gdf["station_id"].isin(extreme_ids)].iterrows():
+        x = row.geometry.x
+        y = row.geometry.y
+        
+        txt = ax.text(x, y,
+                      str(row["station_id"]),
+                      fontsize=5,
+                      ha="left",
+                      va="bottom",
+                      color="black")
+    
+        # Add white halo for clarity
+        txt.set_path_effects([pe.Stroke(linewidth=1.0, foreground="white"),
+                              pe.Normal()])
     
     plt.show()
     # outname = f"{aggname}_{variable}.png"
@@ -159,5 +219,5 @@ def plot_station(station, variable="NPOC_ppm",
     return month_array
 ##-----------------------------------------------------------------------------
 # Call
-plot_by_var(variable="NPOC_ppm",agg="median")
-ma=plot_station(station="TR-UP",variable="NPOC_ppm")
+plot_by_var(variable="DIC_ppm",agg="median")
+ma=plot_station(station="TR-UP",variable="DIC_ppm")
