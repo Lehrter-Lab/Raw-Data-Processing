@@ -102,6 +102,12 @@ def plot_by_var(variable="NPOC_ppm", agg="mean",
     
     # Start Plot
     fig, ax = plt.subplots(figsize=(9, 7))
+    
+    # Set map bounds based off universal range not non-NaN range
+    ax.set_xlim(xmin, xmax)
+    ax.set_ylim(ymin, ymax)
+    
+    # Add data & basemap
     plot    = gdf.plot(ax=ax,column=col,
                        cmap=cmap,markersize=markersize,alpha=0.8,legend=False)
     ctx.add_basemap(ax, source=ctx.providers.OpenStreetMap.Mapnik)
@@ -120,10 +126,6 @@ def plot_by_var(variable="NPOC_ppm", agg="mean",
     cbar    = fig.colorbar(plot.collections[0], cax=cax)
     cbar.ax.tick_params(labelsize=9)
     cbar.ax.set_title(units.upper(), fontsize=10)
-    
-    # Set map bounds based off universal range not non-NaN range
-    ax.set_xlim(xmin, xmax)
-    ax.set_ylim(ymin, ymax)
     
     # Title settings
     title    = (f"{aggname} {varname}")
@@ -238,5 +240,5 @@ def plot_station(station=None, variable="NPOC_ppm",
     return month_array
 ##-----------------------------------------------------------------------------
 # Call
-plot_by_var(variable="DIC_ppm",agg="median")
-ma=plot_station(station="FSRX7",variable="DIC_ppm")
+plot_by_var(variable="NPOC_ppm",agg="median")
+ma=plot_station(station="MR",variable="NPOC_ppm")
