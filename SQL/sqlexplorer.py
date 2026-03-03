@@ -7,6 +7,7 @@ import contextily as ctx
 import pymannkendall as mk
 import matplotlib.patheffects as pe
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from thefuzz import process
 
 # rcParams
 plt.rcParams["figure.dpi"] = 300
@@ -51,7 +52,10 @@ def plot_by_var(variable="NPOC_ppm", agg="mean",
 
     # Sanity check
     if variable not in dfd.columns:
-        raise ValueError(f"{variable} not found in DataFrame.")
+        choices = dfd.columns
+        matches = process.extract(variable, choices)
+        matches = [i[0] for i in matches]
+        raise ValueError(f"{variable} not found in DataFrame. Try one of {*matches,}.")
         
     agg_funcs = {"mean": "mean",
                  "median": "median",
@@ -162,7 +166,10 @@ def plot_station(station=None, variable="NPOC_ppm",
                   cmap="viridis", markersize=40):
     # Sanity check
     if variable not in dfd.columns:
-        raise ValueError(f"{variable} not found in DataFrame.")
+        choices = dfd.columns
+        matches = process.extract(variable, choices)
+        matches = [i[0] for i in matches]
+        raise ValueError(f"{variable} not found in DataFrame. Try one of {*matches,}.")
     
     # Load data
     if station:
