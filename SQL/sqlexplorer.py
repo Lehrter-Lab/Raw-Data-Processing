@@ -29,7 +29,7 @@ gdf = gpd.GeoDataFrame(dfs, geometry=gpd.points_from_xy(dfs.longitude,dfs.latitu
                        crs="EPSG:4326")
 gdf = gdf.to_crs(epsg=3857)             # Reproject for basemap
 fig, ax = plt.subplots(figsize=(9, 7))
-gdf.plot(ax=ax,markersize=12,alpha=0.8)
+gdf.plot(ax=ax,markersize=5,alpha=0.8)
 ctx.add_basemap(ax,source=ctx.providers.OpenStreetMap.Mapnik)
 # Map frame
 ax.set_xticks([])
@@ -40,11 +40,11 @@ ax.set_title("Station Locations")
 for txt in ax.texts:
     txt.set_fontsize(1)
 plt.show()
-# fig.savefig("stations.png",dpi=300,bbox_inches="tight")
+fig.savefig("stations.png",dpi=300,bbox_inches="tight")
 
 ##-----------------------------------------------------------------------------
 # Plot variable grouped by stations, **note: not actual sample location**
-def plot_by_var(variable="NPOC_ppm", agg="mean",
+def plot_by_var(variable="NPOC_ppm", agg="mean", conversion=1, newunits=None,
                 cmap="turbo", markersize=12):
     
     # Cmap suggestions:
@@ -71,6 +71,11 @@ def plot_by_var(variable="NPOC_ppm", agg="mean",
     aggname = agg.capitalize()
     varname = variable.split("_")[0]
     units   = variable.split("_", 1)[1] if "_" in variable else ""
+    
+    # Unit conversion step
+    dfd[variable] = dfd[variable]*conversion
+    if newunits is not None:
+        units = newunits
     
     # Means by station
     agg_vals = (dfd.groupby("station_id", as_index=False)[variable]
@@ -129,7 +134,7 @@ def plot_by_var(variable="NPOC_ppm", agg="mean",
     cax     = divider.append_axes("right", size="8%", pad=0.05)
     cbar    = fig.colorbar(plot.collections[0], cax=cax)
     cbar.ax.tick_params(labelsize=9)
-    cbar.ax.set_title(units.upper(), fontsize=10)
+    cbar.ax.set_title(units.upper(), fontsize=10, ha="left", x=0)
     
     # Title settings
     title    = (f"{aggname} {varname}")
@@ -162,7 +167,7 @@ def plot_by_var(variable="NPOC_ppm", agg="mean",
     # fig.savefig(outname, dpi=300, bbox_inches="tight")
 ##-----------------------------------------------------------------------------
 # Station explorer
-def plot_station(station=None, variable="NPOC_ppm",
+def plot_station(station=None, variable="NPOC_ppm", conversion=1, newunits=None,
                   cmap="viridis", markersize=40):
     # Sanity check
     if variable not in dfd.columns:
@@ -200,6 +205,11 @@ def plot_station(station=None, variable="NPOC_ppm",
                          "legend.fontsize": 13})
     varname = variable.split("_")[0]
     units   = variable.split("_", 1)[1] if "_" in variable else ""
+    
+    # Conversion section
+    df[variable] = df[variable]*conversion
+    if newunits is not None:
+        units = newunits
     
     # Plot scatter of non-aggregate data
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -247,5 +257,5 @@ def plot_station(station=None, variable="NPOC_ppm",
     return month_array
 ##-----------------------------------------------------------------------------
 # Call
-plot_by_var(variable="NPOC_ppm",agg="median")
-ma=plot_station(station="MR",variable="NPOC_ppm")
+plot_by_var(variable="DIC_ppm",agg="median")
+plot_station(station="TR",variable="DIC_ppm")
