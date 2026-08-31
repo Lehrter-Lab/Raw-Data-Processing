@@ -18,3 +18,6 @@ If you are using the auto mode, ensure that your folder only has files that you 
 The threshold for a standard flags in the script is an ordinary r-squared of < 0.9990. This flag is conservative and should be adjusted upwards as necessary.
 
 If standards are excluded in the TOC software, that will not be reflected in the script. Make a note of any such exclusions.
+
+## SQL
+Currently there are two scripts in this sub repo. One generates an SQLite database using input master sheets assuming a format identical to the NOAA Restore data. The second visualizes this data. Note that in the generator file there is currently a bug with overwrites when updating. Nothing breaks but this needs to be resolved for proper version controlling of the database records.
